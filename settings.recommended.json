@@ -1,12 +1,23 @@
 {
   "permissions": {
     "allow": [
+      "Bash(ah_curl GET *)",
+      "Bash(ah_curl POST *)",
+      "Bash(ah_curl PATCH *)",
+      "Bash(ah_curl PUT *)",
+      "Bash(ah_curl DELETE *)",
+      "Bash(*apparelhub/scripts/ah_curl GET *)",
+      "Bash(*apparelhub/scripts/ah_curl POST *)",
+      "Bash(*apparelhub/scripts/ah_curl PATCH *)",
+      "Bash(*apparelhub/scripts/ah_curl PUT *)",
+      "Bash(*apparelhub/scripts/ah_curl DELETE *)",
       "Bash(curl -sS https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X POST https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X PATCH https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X PUT https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X DELETE https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/*)",
+      "Bash(curl -sS -o /tmp/* https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/*)",
       "Bash(jq:*)",
       "Bash(python3 *apparelhub/scripts/make_transparent.py *)",
       "Bash(python3 /tmp/*)",

@@ -4,16 +4,20 @@ A complete walkthrough for the Champion Packable Anorak (Printful product 399) w
 
 **Read `references/embroidery.md` first.** The thread palette and the `thread_colors_<placement>` options trap will absolutely ruin your day if you skip them.
 
+**Invocation convention used throughout this file:**
+- All Agent API calls go through `ah_curl` (see `SKILL.md` section 1). Invoke via the full install path `~/.claude/skills/apparelhub/scripts/ah_curl` or as bare `ah_curl` if the scripts dir is on PATH.
+- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — substitute the LITERAL value from the previous step's response. **No shell variables.**
+
 ---
 
 ## Setup
 
 ```bash
-export APPARELHUB_API_KEY=ah_...
-BASE=https://api.apparelhub.ai/agents/v1
-PROVIDER_UUID=c8dff2fa-1a43-4734-93f0-e2ddd03eae53   # Printful prod
-PRODUCT_REF_ID=399                                    # Champion Packable Anorak
+export APPARELHUB_API_KEY=ah_...   # one-time
 ```
+
+Printful prod provider UUID: `c8dff2fa-1a43-4734-93f0-e2ddd03eae53`
+Champion Packable Anorak product_ref_id: `399`
 
 ---
 
@@ -27,18 +31,14 @@ The design's dominant colors should be subsets of Printful's 15-color thread pal
 - Stick to 2-3 colors total for a chest crest
 
 ```bash
-GEN=$(curl -sS -X POST "$BASE/images/generate" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "flat heraldic crest emblem, bold forest green outline, bright yellow gold fills, simple geometric shapes, no fine detail, designed for embroidery stitching, on solid bright green #00FF00 background",
-    "source": "Nano Banana",
-    "size": "1024x1024"
-  }')
-
-GENERATED_IMAGE_UUID=$(echo "$GEN" | jq -r '.generated_image.uuid')
-GENERATED_IMAGE_URL=$(echo "$GEN" | jq -r '.generated_image.url')
+ah_curl POST /agents/v1/images/generate -d '{
+  "prompt": "flat heraldic crest emblem, bold forest green outline, bright yellow gold fills, simple geometric shapes, no fine detail, designed for embroidery stitching, on solid bright green #00FF00 background",
+  "source": "Nano Banana",
+  "size": "1024x1024"
+}'
 ```
+
+Capture the `uuid` and `url` from the response.
 
 **Vision-verify before proceeding:**
 - Are colors flat (no gradients)?
@@ -49,34 +49,25 @@ GENERATED_IMAGE_URL=$(echo "$GEN" | jq -r '.generated_image.url')
 
 ## Phase 2 — Local transparency processing (same as standard apparel)
 
-```python
-import os
-import requests
-from io import BytesIO
-from PIL import Image
+```bash
+# Download the green-background image to /tmp. Substitute the literal URL.
+curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/..." -o /tmp/crest_green.png
 
-URL = os.environ['GENERATED_IMAGE_URL']
-img = Image.open(BytesIO(requests.get(URL).content)).convert('RGBA')
-target = (0, 255, 0)
-tolerance = 60
-
-new_data = []
-for r, g, b, a in img.getdata():
-    if all(abs(c - t) < tolerance for c, t in zip((r, g, b), target)):
-        new_data.append((255, 255, 255, 0))
-    else:
-        new_data.append((r, g, b, a))
-img.putdata(new_data)
-img.save('/tmp/crest_transparent.png', 'PNG')
+# Strip the green background via the packaged script.
+python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \
+    /tmp/crest_green.png /tmp/crest_transparent.png \
+    --preview /tmp/crest_preview.jpg
 ```
+
+Inspect `/tmp/crest_preview.jpg` to confirm clean transparency. Then upload:
 
 ```bash
-TRANSFORM=$(curl -sS -X POST "$BASE/images/generated/$GENERATED_IMAGE_UUID/transform" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -F "image=@/tmp/crest_transparent.png")
-TRANSPARENT_IMAGE_UUID=$(echo "$TRANSFORM" | jq -r '.generated_image.uuid')
-TRANSPARENT_IMAGE_URL=$(echo "$TRANSFORM" | jq -r '.generated_image.url')
+# Substitute the literal original image UUID from Phase 1.
+ah_curl POST /agents/v1/images/generated/<image_uuid>/transform \
+    -F image=@/tmp/crest_transparent.png
 ```
+
+Capture the NEW transparent-image UUID + URL from the response. Use it for Phase 3 onwards.
 
 ---
 
@@ -84,6 +75,12 @@ TRANSPARENT_IMAGE_URL=$(echo "$TRANSFORM" | jq -r '.generated_image.url')
 
 Don't guess. Sample the dominant colors and map each to the nearest palette entry.
 
+```bash
+# Save as /tmp/pick_threads.py and run with `python3 /tmp/pick_threads.py`
+python3 /tmp/pick_threads.py
+```
+
+Where `/tmp/pick_threads.py` is:
 ```python
 from PIL import Image
 from collections import Counter
@@ -101,7 +98,7 @@ for color, count in buckets.most_common(10):
         print(f"  RGB({color[0]:3d},{color[1]:3d},{color[2]:3d}) - {pct:.1f}%")
 ```
 
-**Map each bucket to the nearest palette entry by eye** (or by CIE Lab distance if you want to be rigorous — never by raw RGB Euclidean, which mis-categorizes browns and golds):
+**Map each bucket to the nearest palette entry by eye** (or by CIE Lab distance if you want to be rigorous — never by raw RGB Euclidean, which mis-categorizes browns and golds).
 
 Printful's 15 thread colors:
 ```
@@ -121,61 +118,44 @@ For our forest-green-and-gold crest, expected mapping:
 ## Phase 3 — Generate the mockup
 
 ```bash
-PREVIEW=$(curl -sS -X POST "$BASE/merchandise/product/preview" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"merchandise_provider_uuid\": \"$PROVIDER_UUID\",
-    \"generated_image_uuid\": \"$TRANSPARENT_IMAGE_UUID\",
-    \"provider_product_ref_id\": \"399\",
-    \"templates\": [
-      {
-        \"provider_ref_id\": \"embroidery_chest_left\",
-        \"image_url\": \"$TRANSPARENT_IMAGE_URL\",
-        \"area_width\": 541,
-        \"area_height\": 541,
-        \"width\": 541,
-        \"height\": 541,
-        \"top\": 0,
-        \"left\": 0
-      }
-    ],
-    \"variant_ids\": [11008, 11009, 11010, 11011, 11012]
-  }")
-
-JOB_UUID=$(echo "$PREVIEW" | jq -r '.job_uuid')
+ah_curl POST /agents/v1/merchandise/product/preview -d '{
+  "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "generated_image_uuid": "<transparent_image_uuid>",
+  "provider_product_ref_id": "399",
+  "templates": [
+    {
+      "provider_ref_id": "embroidery_chest_left",
+      "image_url": "<transparent_image_url>",
+      "area_width": 541,
+      "area_height": 541,
+      "width": 541,
+      "height": 541,
+      "top": 0,
+      "left": 0
+    }
+  ],
+  "variant_ids": [11008, 11009, 11010, 11011, 11012]
+}'
 ```
+
+Capture `job_uuid`.
 
 ---
 
 ## Phase 3.5 — Poll + verify
 
-Same polling pattern as the standard examples. After `preview_url` is populated, visually verify the mockup:
+```bash
+# Poll job status every 5s until status: completed. Substitute literal job UUID.
+ah_curl GET /agents/v1/merchandise/product/preview/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/job/<job_uuid>
+
+# Then poll for S3 ingestion every 8s until at least one preview_url != null.
+ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+```
+
+Pick a front-view mockup URL. Visually verify:
 - Crest sits on the chest-left correctly (not too high, not too low)
 - Colors render as expected on the dark anorak
 - Design isn't TOO small to read at a normal viewing distance
-
-```bash
-while true; do
-  STATUS=$(curl -sS "$BASE/merchandise/product/preview/$PROVIDER_UUID/job/$JOB_UUID" \
-    -H "x-api-key: $APPARELHUB_API_KEY" | jq -r '.status')
-  [ "$STATUS" = "completed" ] && break
-  sleep 5
-done
-
-while true; do
-  PREVIEWS=$(curl -sS "$BASE/merchandise/product/preview-job/$JOB_UUID/previews" \
-    -H "x-api-key: $APPARELHUB_API_KEY")
-  READY=$(echo "$PREVIEWS" | jq '[.items[] | select(.preview_url != null)] | length')
-  [ "$READY" -gt 0 ] && break
-  sleep 8
-done
-
-DISPLAY=$(echo "$PREVIEWS" | jq -r '
-  [.items[] | select(.provider_preview_ref_url | contains("-front-"))][0]
-  | (.preview_url // .provider_preview_ref_url)
-')
-```
 
 ---
 
@@ -184,39 +164,34 @@ DISPLAY=$(echo "$PREVIEWS" | jq -r '
 Embroidery cost is higher than standard print. Recommended retail $89.99 on the Champion Anorak.
 
 ```bash
-PRODUCT=$(curl -sS -X POST "$BASE/product/create" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{
-    \"name\": \"Heraldic Crest Embroidered Anorak\",
-    \"description\": \"Classic heraldic crest embroidered on a Champion Packable Anorak. Lightweight, packable, perfect for transitional weather.\",
-    \"generated_image_uuid\": \"$TRANSPARENT_IMAGE_UUID\",
-    \"preview_job_uuid\": \"$JOB_UUID\",
-    \"provider_uuid\": \"$PROVIDER_UUID\",
-    \"product_ref_id\": \"399\",
-    \"price\": 89.99,
-    \"display_image\": \"$DISPLAY\",
-    \"print_data\": [
-      {
-        \"provider_ref_id\": \"embroidery_chest_left\",
-        \"image_url\": \"$TRANSPARENT_IMAGE_URL\",
-        \"area_width\": 541,
-        \"area_height\": 541,
-        \"width\": 541,
-        \"height\": 541,
-        \"top\": 0,
-        \"left\": 0,
-        \"options\": [
-          {
-            \"id\": \"thread_colors_chest_left\",
-            \"value\": [\"#01784E\", \"#FFCC00\", \"#A67843\"]
-          }
-        ]
-      }
-    ]
-  }")
-
-PRODUCT_UUID=$(echo "$PRODUCT" | jq -r '.product.uuid')
+ah_curl POST /agents/v1/product/create -d '{
+  "name": "Heraldic Crest Embroidered Anorak",
+  "description": "Classic heraldic crest embroidered on a Champion Packable Anorak. Lightweight, packable, perfect for transitional weather.",
+  "generated_image_uuid": "<transparent_image_uuid>",
+  "preview_job_uuid": "<job_uuid>",
+  "provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "product_ref_id": "399",
+  "price": 89.99,
+  "display_image": "<mockup_url>",
+  "print_data": [
+    {
+      "provider_ref_id": "embroidery_chest_left",
+      "image_url": "<transparent_image_url>",
+      "area_width": 541,
+      "area_height": 541,
+      "width": 541,
+      "height": 541,
+      "top": 0,
+      "left": 0,
+      "options": [
+        {
+          "id": "thread_colors_chest_left",
+          "value": ["#01784E", "#FFCC00", "#A67843"]
+        }
+      ]
+    }
+  ]
+}'
 ```
 
 ### ⚠️ The `options` field on `print_data`
@@ -225,32 +200,20 @@ When ApparelHub builds the Printful sync payload internally, it HOISTS the `opti
 
 Pass `options` on the `print_data[i]` dict at create time. The platform handles the hoisting. Do NOT try to put options at a different level — the field-name flips are documented and this is the canonical shape for the create endpoint.
 
+Capture the product UUID.
+
 ---
 
 ## Phase 5 — Add variants (5 black sizes)
 
-```bash
-declare -A SIZES=(
-  [11008]="S" [11009]="M" [11010]="L" [11011]="XL" [11012]="2XL"
-)
+Substitute the literal product UUID. 2XL costs $2 more — price adjusted.
 
-for vid in "${!SIZES[@]}"; do
-  size="${SIZES[$vid]}"
-  # 2XL costs $2 more — adjust price
-  price=89.99
-  [ "$size" = "2XL" ] && price=91.99
-  curl -sS -X POST "$BASE/product/$PRODUCT_UUID/variants" \
-    -H "x-api-key: $APPARELHUB_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"name\": \"Black\",
-      \"price\": $price,
-      \"color\": \"Black\",
-      \"size\": \"$size\",
-      \"provider_variant_id\": $vid
-    }" > /dev/null
-  echo "Variant: Black $size (provider $vid)"
-done
+```bash
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"S","provider_variant_id":11008}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"M","provider_variant_id":11009}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"L","provider_variant_id":11010}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"XL","provider_variant_id":11011}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":91.99,"color":"Black","size":"2XL","provider_variant_id":11012}'
 ```
 
 ---
@@ -260,26 +223,22 @@ done
 Same as standard apparel. The embroidery options propagate through fulfillment sync automatically — no extra parameters needed at the sync call.
 
 ```bash
-STORE_UUID=$(curl -sS "$BASE/store" -H "x-api-key: $APPARELHUB_API_KEY" | jq -r '.items[0].uuid')
+ah_curl GET /agents/v1/store
+# Capture store UUID.
 
-curl -sS -X POST "$BASE/store/$STORE_UUID/products" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d "{\"product_uuids\": [\"$PRODUCT_UUID\"]}"
+ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<product_uuid>"]}'
 
-# Fulfillment first
-curl -sS -X POST "$BASE/store/$STORE_UUID/products/$PRODUCT_UUID/sync?target=merchandise" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
-# If this fails with "thread_colors_chest_left option is missing or incorrect", the options
-# probably aren't at the right level. See references/embroidery.md.
+# Fulfillment first.
+ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise
+# If this 400s with "thread_colors_chest_left option is missing or incorrect",
+# the options probably aren't at the right level. See references/embroidery.md.
 
-# Then sales channels, as DRAFT
-INTEGRATION_UUID=$(curl -sS "$BASE/store/$STORE_UUID" \
-  -H "x-api-key: $APPARELHUB_API_KEY" | \
-  jq -r '.ecommerce_statuses[] | select(.provider_name == "Shopify") | .integration_uuid')
+# Find Shopify integration.
+ah_curl GET /agents/v1/store/<store_uuid>
+# Pull integration_uuid from ecommerce_statuses[].
 
-curl -sS -X POST "$BASE/store/$STORE_UUID/products/$PRODUCT_UUID/sync?target=ecommerce&integration_uuid=$INTEGRATION_UUID" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+# Sales channel sync, as DRAFT.
+ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>
 ```
 
 ---
@@ -317,7 +276,7 @@ Each placement has its OWN file entry AND its OWN options entry. The platform ho
 
 > "Heraldic Crest Anorak is live in 5 sizes (S–2XL).
 >
-> - Mockup: `<DISPLAY>`
+> - Mockup: `<mockup_url>`
 > - 3 embroidery thread colors: forest green, bright gold, bronze
 > - Product manager: `https://apparelhub.ai/merchandise/my-products`
 > - Synced to your Shopify as DRAFT — review and publish from your Shopify admin when ready.

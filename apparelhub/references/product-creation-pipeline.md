@@ -2,19 +2,18 @@
 
 The 7-phase workflow from "user wants a saguaro tee" to "product is live on their Shopify store." Execute the phases IN ORDER. Skipping or reordering a phase produces broken products that look successful but silently fail downstream.
 
+**All Agent API calls in this document use the `ah_curl` wrapper** (see `SKILL.md` section 1). When you see `ah_curl METHOD /agents/v1/...` below, invoke via the full path `~/.claude/skills/apparelhub/scripts/ah_curl ...` (or the bare `ah_curl` if the user has the scripts dir on PATH). When you see placeholders like `<image_uuid>` or `<job_uuid>`, substitute the LITERAL value from the previous step's response — never a shell variable.
+
 ---
 
 ## Phase 1 — Generate the design image
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, on solid bright green background #00FF00",
-    "source": "Nano Banana",
-    "size": "1024x1024"
-  }'
+ah_curl POST /agents/v1/images/generate -d '{
+  "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, on solid bright green background #00FF00",
+  "source": "Nano Banana",
+  "size": "1024x1024"
+}'
 ```
 
 Returns `{ "generated_image": { "uuid": "...", "url": "..." } }`. Save the UUID.
@@ -58,14 +57,15 @@ Don't silently make this call.
 Use the bundled helper at `scripts/make_transparent.py` (relative to this skill's base directory). It does border flood-fill + an enclosed-region sweep (so letter holes go transparent), auto-detects the actual chroma color from the corners (AI green is rarely exactly `#00FF00`), writes pre-multiplied white to avoid halos, and can emit a dark-background preview. It is the single, reviewable entry point for this step — invoke it BY PATH so it stays inside the whitelist (see `settings.recommended.json`); do NOT paste an inline `python3 -c`/heredoc version, which would prompt on every run.
 
 ```bash
-# Download the generated image (it has a solid green background)
-curl -sS "$IMAGE_URL" -o /tmp/design_green.png
+# Download the generated image (it has a solid green background).
+# Use the LITERAL URL from Phase 1's response — don't store it in a shell var.
+curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<literal-image-path>.png" \
+    -o /tmp/design_green.png
 
-# Strip the background -> true RGBA. $SKILL_DIR is this skill's base directory.
-# Leave the script path UNQUOTED so it matches the allowlist pattern
-# `Bash(python3 *apparelhub/scripts/make_transparent.py *)` (the standard
-# ~/.claude/skills/apparelhub install path has no spaces).
-python3 $SKILL_DIR/scripts/make_transparent.py \
+# Strip the background -> true RGBA. Invoke make_transparent.py by literal path
+# (the allowlist pattern is `Bash(python3 *apparelhub/scripts/make_transparent.py *)`
+# so any path ending in apparelhub/scripts/make_transparent.py matches).
+python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \
     /tmp/design_green.png /tmp/design_transparent.png \
     --preview /tmp/design_preview.jpg
 ```
@@ -85,10 +85,11 @@ The script exits non-zero and warns if the corners aren't fully transparent — 
 (Which is just an upload — NOT a transformation):
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/<original_image_uuid>/transform" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -F "image=@/tmp/design_transparent.png"
+ah_curl POST /agents/v1/images/generated/<original_image_uuid>/transform \
+    -F image=@/tmp/design_transparent.png
 ```
+
+`ah_curl` detects the `-F` flag and skips the default `Content-Type: application/json` so curl sets the multipart boundary correctly.
 
 Returns a NEW image UUID + URL with true RGBA transparency. **Use the NEW UUID for Phase 3 onwards.**
 
@@ -122,8 +123,7 @@ Don't copy the names from one phase to the other. Same data, flipped names.
 ### Step 3a: Browse the catalog if you don't know the `product_ref_id`
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/products?fields=provider_ref_id,name,brand" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/merchandise/<provider_uuid>/products?fields=provider_ref_id,name,brand
 ```
 
 ### Step 3b: FETCH the garment's print templates
@@ -131,8 +131,7 @@ curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/produc
 This gives you `area_width`, `area_height`, and the valid `provider_ref_id` for each print placement. **DO NOT hardcode these dimensions.** They vary per garment.
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>
 ```
 
 The response includes `print_templates` (or similar) with each placement's dimensions and `provider_ref_id` (e.g., `"front"`, `"back"`, `"embroidery_chest_left"`, `"default"`).
@@ -159,27 +158,24 @@ For embroidery: tight placement on the chest-left or similar. See `references/em
 ### Step 3d: Create the preview with the COMPLETE template structure
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "merchandise_provider_uuid": "<provider_uuid>",
-    "generated_image_uuid": "<image_uuid>",
-    "provider_product_ref_id": "71",
-    "templates": [
-      {
-        "provider_ref_id": "front",
-        "image_url": "<image_url>",
-        "area_width": 728,
-        "area_height": 376,
-        "width": 600,
-        "height": 600,
-        "top": 0,
-        "left": 64
-      }
-    ],
-    "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
-  }'
+ah_curl POST /agents/v1/merchandise/product/preview -d '{
+  "merchandise_provider_uuid": "<provider_uuid>",
+  "generated_image_uuid": "<image_uuid>",
+  "provider_product_ref_id": "71",
+  "templates": [
+    {
+      "provider_ref_id": "front",
+      "image_url": "<image_url>",
+      "area_width": 728,
+      "area_height": 376,
+      "width": 600,
+      "height": 600,
+      "top": 0,
+      "left": 64
+    }
+  ],
+  "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
+}'
 ```
 
 Notes:
@@ -189,8 +185,7 @@ Notes:
 Returns a `job_uuid`. Mockup generation is **async** — poll until complete:
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/product/preview/<provider_uuid>/job/<job_uuid>" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/merchandise/product/preview/<provider_uuid>/job/<job_uuid>
 ```
 
 ---
@@ -205,8 +200,7 @@ When the job status is `completed`, **DO NOT immediately proceed to product crea
 **Poll until at least one preview has a non-null `preview_url`:**
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/product/preview-job/<job_uuid>/previews" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
 ```
 
 Once `preview_url` is populated, **visually inspect the mockup**. Download with curl and view, or hand to vision tools. Check for:
@@ -226,8 +220,10 @@ If anything looks wrong, FIX the design and re-mockup before continuing. Never s
 Before calling product create, query the preview job's preview rows to pick the BEST mockup for the product thumbnail (`display_image`) AND build a curated gallery (`gallery_images`). The platform picks sensible defaults if you skip this; explicit selection gives the merchant a better product page out of the gate.
 
 ```bash
-PREVIEWS=$(curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/product/preview-job/<job_uuid>/previews" \
-  -H "x-api-key: $APPARELHUB_API_KEY")
+ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+# Parse the response JSON in your reasoning context. Don't shove it into a
+# shell variable — you'll need to reference individual preview URLs literally
+# in the product create body anyway.
 ```
 
 Each preview row has:
@@ -266,38 +262,35 @@ This phase has FOUR FIELD-NAME GOTCHAS that silently break products. Memorize �
 Wrong field names create the product "successfully" but with NULL `manufacturing_metadata`, and sync silently fails downstream. The API does not reject the mistake.
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Saguaro Desert Sunset Tee",
-    "description": "Hand-illustrated saguaro silhouette against a warm desert sunset.",
-    "generated_image_uuid": "<image_uuid>",
-    "preview_job_uuid": "<job_uuid>",
-    "provider_uuid": "<provider_uuid>",
-    "product_ref_id": "71",
-    "price": 27.99,
-    "display_image": "<chosen_dark_color_front_preview_url>",
-    "gallery_images": [
-      "<black_front_url>",
-      "<navy_front_url>",
-      "<white_front_url>",
-      "<black_back_url>",
-      "<navy_back_url>"
-    ],
-    "print_data": [
-      {
-        "provider_ref_id": "front",
-        "image_url": "<original_image_url>",
-        "area_width": 728,
-        "area_height": 376,
-        "width": 600,
-        "height": 600,
-        "top": 0,
-        "left": 64
-      }
-    ]
-  }'
+ah_curl POST /agents/v1/product/create -d '{
+  "name": "Saguaro Desert Sunset Tee",
+  "description": "Hand-illustrated saguaro silhouette against a warm desert sunset.",
+  "generated_image_uuid": "<image_uuid>",
+  "preview_job_uuid": "<job_uuid>",
+  "provider_uuid": "<provider_uuid>",
+  "product_ref_id": "71",
+  "price": 27.99,
+  "display_image": "<chosen_dark_color_front_preview_url>",
+  "gallery_images": [
+    "<black_front_url>",
+    "<navy_front_url>",
+    "<white_front_url>",
+    "<black_back_url>",
+    "<navy_back_url>"
+  ],
+  "print_data": [
+    {
+      "provider_ref_id": "front",
+      "image_url": "<original_image_url>",
+      "area_width": 728,
+      "area_height": 376,
+      "width": 600,
+      "height": 600,
+      "top": 0,
+      "left": 64
+    }
+  ]
+}'
 ```
 
 ### `print_data` vs `display_image` — what each is for
@@ -316,25 +309,22 @@ Returns the new product `uuid`.
 
 Variants are created ONE AT A TIME (no batch endpoint). The product is unsyncable until variants exist.
 
+**Do NOT use a shell for-loop with `$vid`** — that triggers a prompt on every iteration. Issue separate `ah_curl` calls with LITERAL variant IDs:
+
 ```bash
-for vid in 4016 4017 4018 4019 4020; do
-  curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" \
-    -H "x-api-key: $APPARELHUB_API_KEY" \
-    -H "Content-Type: application/json" \
-    -d "{
-      \"name\": \"Black\",
-      \"price\": 27.99,
-      \"color\": \"Black\",
-      \"size\": \"M\",
-      \"provider_variant_id\": $vid
-    }"
-done
+# One ah_curl call per variant, literal IDs substituted. Substitute the real
+# product UUID from Phase 4's response wherever you see <product_uuid>.
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"S","provider_variant_id":4016}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"M","provider_variant_id":4017}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"L","provider_variant_id":4018}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"XL","provider_variant_id":4019}'
+ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"2XL","provider_variant_id":4020}'
+# ...repeat for Navy (8495-8499) and White (4012-4015, 4011)
 ```
 
 Look up the right variant IDs via:
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/product/71" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/merchandise/<provider_uuid>/product/71
 ```
 
 Or use the quick-reference variant tables in `references/garment-catalog.md`.
@@ -345,14 +335,10 @@ Or use the quick-reference variant tables in `references/garment-catalog.md`.
 
 ```bash
 # List stores first
-curl -sS "https://api.apparelhub.ai/agents/v1/store" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/store
 
-# Then add the product
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products" \
-  -H "x-api-key: $APPARELHUB_API_KEY" \
-  -H "Content-Type: application/json" \
-  -d '{"product_uuids": ["<product_uuid>"]}'
+# Then add the product (substitute literal UUIDs)
+ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<product_uuid>"]}'
 ```
 
 ---
@@ -364,8 +350,7 @@ Sync targets are different depending on what you're syncing to.
 ### Fulfillment (Printful/Printify) — REQUIRED FIRST
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise
 ```
 
 This creates the product on the fulfillment provider's side. MUST succeed before ecommerce sync — Shopify/Etsy/etc. need the fulfillment SKU to attach.
@@ -373,8 +358,7 @@ This creates the product on the fulfillment provider's side. MUST succeed before
 ### Ecommerce (Shopify, Etsy, WooCommerce, Wix)
 
 ```bash
-curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>
 ```
 
 Sync to multiple channels by calling this once per integration UUID.

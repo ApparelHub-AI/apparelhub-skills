@@ -20,24 +20,82 @@ This SKILL.md is the router. Detailed playbooks live in `references/` and end-to
 
 ---
 
-## 1. Authentication
+## 1. Authentication — ALWAYS use `ah_curl`
 
-Every API call requires the user's ApparelHub API key in the `x-api-key` header.
+Every API call needs the user's ApparelHub API key in the `x-api-key` header. **Do NOT compose `curl ... -H "x-api-key: $APPARELHUB_API_KEY"` yourself** — Claude Code's permission system prompts on any command containing `$VAR` expansion regardless of how broad your allowlist is. The bundled `scripts/ah_curl` wrapper hides the env-var read INSIDE the script so your command line stays expansion-free.
+
+### How to invoke
+
+The wrapper lives at `~/.claude/skills/apparelhub/scripts/ah_curl` (or the equivalent install path). Invoke by full path:
 
 ```bash
-echo "${APPARELHUB_API_KEY:?APPARELHUB_API_KEY not set}"
+~/.claude/skills/apparelhub/scripts/ah_curl GET /agents/v1/store
 ```
 
-If missing, tell the user:
+If the user has added `~/.claude/skills/apparelhub/scripts` to their PATH (see the repo README's install section), the bare invocation works too:
+
+```bash
+ah_curl GET /agents/v1/store
+```
+
+The allowlist patterns in `settings.recommended.json` match BOTH forms.
+
+### Argument shape
+
+```
+ah_curl METHOD PATH_OR_URL [extra curl args...]
+```
+
+- `METHOD` — `GET`, `POST`, `PATCH`, `PUT`, `DELETE` (uppercase, no `-X` prefix)
+- `PATH_OR_URL` — an absolute path (prepended with `https://api.apparelhub.ai`) or a full URL
+- Extra args pass through to curl unchanged: `-d '{...}'` for JSON bodies, `-F image=@/tmp/x.png` for multipart, `-o /tmp/out` to save the response
+
+### Examples
+
+```bash
+ah_curl GET /agents/v1/store
+ah_curl POST /agents/v1/images/generate -d '{"prompt":"...","source":"Nano Banana"}'
+ah_curl POST /agents/v1/images/generated/abc-123/transform -F image=@/tmp/design_transparent.png
+ah_curl PATCH /agents/v1/product/abc-123 -d '{"display_image":"https://..."}'
+ah_curl DELETE /agents/v1/product/abc-123
+```
+
+### Key not set?
+
+`ah_curl` exits 2 with a clear error if `APPARELHUB_API_KEY` is missing. Use that as your auth check — don't echo the variable yourself (the echo command would contain expansion and prompt). Tell the user:
 > You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=ah_xxx...`
 
-Use it in every call:
+### Spec lookup
+
+The canonical OpenAPI spec lives at `https://api.apparelhub.ai/agents/v1/openapi.json` — fetch it the same way as any other GET:
+
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/store" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/openapi.json
 ```
 
-The canonical OpenAPI spec lives at `https://api.apparelhub.ai/agents/v1/openapi.json` (requires the same `x-api-key`). When in doubt about field names, fetch the spec.
+When in doubt about field names, fetch the spec.
+
+---
+
+## 1a. Use LITERAL values, never shell variables
+
+The same `simple_expansion` rule that forced `ah_curl` also applies to captured UUIDs, URLs, and anything else you'd typically store in a shell variable. **DON'T** do this:
+
+```bash
+PRODUCT_UUID=$(ah_curl POST /agents/v1/product/create -d '...' | jq -r '.product.uuid')
+ah_curl POST /agents/v1/product/$PRODUCT_UUID/variants -d '...'   # ← $PRODUCT_UUID triggers prompt
+```
+
+**DO** capture the value in your OWN reasoning context (parse the JSON, remember the UUID), then paste it LITERALLY into the next command:
+
+```bash
+ah_curl POST /agents/v1/product/create -d '...'
+# Response: {"product": {"uuid": "abc-123-def-456", ...}}
+# (You read the UUID from the output and substitute it inline below.)
+ah_curl POST /agents/v1/product/abc-123-def-456/variants -d '...'
+```
+
+The agent IS the orchestrator. Don't delegate state to the shell. This applies to every UUID, URL, integration ID, job ID, etc. that you capture between API calls.
 
 ---
 
@@ -117,22 +175,18 @@ For embroidered products, design colors must come from Printful's 15-color threa
 
 ```bash
 # List the user's stores
-curl -sS "https://api.apparelhub.ai/agents/v1/store" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/store
 
 # List products on a specific store (use ?fields= to trim payload)
-curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products?fields=uuid,name,price,status,thumbnail_url,fulfillment_status,ecommerce_statuses" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+# Substitute the literal store UUID before invoking.
+ah_curl GET /agents/v1/store/<store_uuid>/products?fields=uuid,name,price,status,thumbnail_url,fulfillment_status,ecommerce_statuses
 
 # List the user's AI-generated images
-curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?limit=20&sort=newest" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/images/generated?limit=20&sort=newest
 
 # List orders (then drill into one)
-curl -sS "https://api.apparelhub.ai/agents/v1/orders?limit=10" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
-curl -sS "https://api.apparelhub.ai/agents/v1/orders/<uuid>" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/orders?limit=10
+ah_curl GET /agents/v1/orders/<uuid>
 ```
 
 For order data interpretation (payment status, fulfillment status, who actually charged the card), see `references/orders-and-fulfillment.md`.

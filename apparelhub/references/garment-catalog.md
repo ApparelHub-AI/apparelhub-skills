@@ -3,8 +3,7 @@
 Variant IDs, pricing floors, color-mix recommendations. Verify against the live catalog endpoint when in doubt:
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>" \
-  -H "x-api-key: $APPARELHUB_API_KEY" | python3 -m json.tool
+ah_curl GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id> | python3 -m json.tool
 ```
 
 ---

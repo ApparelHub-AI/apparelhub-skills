@@ -30,8 +30,7 @@ Sales channel integration is locked (admin lock OR per-merchant lock). Mutating 
 
 If they don't know why it's locked, the audit log has the answer:
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/audit-log?action=integration_locked" \
-  -H "x-api-key: $APPARELHUB_API_KEY"
+ah_curl GET /agents/v1/store/<store_uuid>/audit-log?action=integration_locked
 ```
 
 ### `sales_channel_uniqueness_violation`
