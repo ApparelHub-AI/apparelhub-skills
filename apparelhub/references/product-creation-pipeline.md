@@ -23,6 +23,7 @@ Returns `{ "generated_image": { "uuid": "...", "url": "..." } }`. Save the UUID.
 - Why we prompt for solid bright green `#00FF00` instead of "transparent background"
 - Vision-verification of any text in the design
 - Which AI source to use for which kind of design (table)
+- **`POST /images/generate` ALSO supports img2img edit** when the user wants to iterate on an existing design — pass `source_image_uuid` (gallery) or `images=@...` (upload). Only Nano Banana and OpenAI support edit mode. See section 5b in design-rules.md for the request shape + field-name gotchas.
 
 **After Phase 1 — decide whether Phase 2 is required:**
 

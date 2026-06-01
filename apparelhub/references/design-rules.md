@@ -94,6 +94,83 @@ When in doubt, default to `Nano Banana` — it's the most consistent across cate
 
 ---
 
+## 5b. Generating vs editing — `POST /images/generate` is BOTH endpoints
+
+`POST /agents/v1/images/generate` is overloaded. Same endpoint, same `ah_curl` invocation pattern, but the **request shape** determines whether you're doing text-to-image OR img2img editing.
+
+### Three modes
+
+| Mode | Use when… | Request shape |
+|---|---|---|
+| **Text-to-image** | Generating a new design from scratch | JSON: `{"prompt": "...", "source": "...", "size": "..."}` |
+| **Img2img via gallery** | User says "edit this existing design", "make the cat smug", "use this as a starting point". The source image already lives in the user's apparelhub gallery. | JSON: `{"prompt": "...", "source_image_uuid": "<uuid>", "additional_image_uuids": ["<uuid2>", ...]}` |
+| **Img2img via upload** | User uploads a fresh image from their machine OR a Phase 2 transparent-keyed file. | multipart: `prompt=...`, `source=...`, `size=...`, `images=@/tmp/x.png` (or `image=@...` for single) |
+
+The same `source` and `size` parameters apply to all three modes. `additional_image_uuids` (gallery) and additional `images=@...` fields (multipart) enable multi-image reference — combine up to ~5 source images in one edit.
+
+### Field name gotchas
+
+- **`source_image_uuid`** — NOT `image_uuid`, NOT `source_uuid`, NOT `reference_uuid`. The endpoint silently treats the wrong field as missing and falls back to text-to-image mode, OR throws a generic "unexpected system error" depending on what else was passed. If your agent gets a 500 with no useful body, double-check this field name first.
+- **`additional_image_uuids`** — array of UUIDs. Plural. NOT `reference_image_uuids` or `extra_image_uuids`.
+- **`images=@...`** (multipart) — plural. The endpoint also accepts `image=@...` (singular) for backward compat with single-image uploads, but `images=@...` is the canonical form.
+- All UUIDs must be designs the user owns (filtered by `author_id`). Cross-user references fail with `Source image not found or access denied`.
+
+### Source compatibility — edit only works on Nano Banana + OpenAI
+
+Replicate-backed sources (Seedream 4.0, Seedream 4.5, Flux 1.1 Pro, Google Imagen 4, GPT Image 2, Grok Imagine, Wan 2.7) raise **422** on the edit path by design. The wrapper around their SDKs simply doesn't support img2img.
+
+| Source | Text-to-image | Img2img edit | Multi-image |
+|---|---|---|---|
+| Nano Banana | ✅ | ✅ | ✅ (best at character consistency) |
+| OpenAI | ✅ | ✅ | ✅ |
+| Seedream 4.0 | ✅ | ❌ 422 | ❌ |
+| Seedream 4.5 | ✅ | ❌ 422 | ❌ |
+| Flux 1.1 Pro | ✅ | ❌ 422 | ❌ |
+| Google Imagen 4 | ✅ | ❌ 422 | ❌ |
+| GPT Image 2 | ✅ | ❌ 422 | ❌ |
+| Grok Imagine | ✅ | ❌ 422 | ❌ |
+| Wan 2.7 | ✅ | ❌ 422 | ❌ |
+
+If the user wants edit and you'd normally reach for Seedream for the text accuracy, switch to **Nano Banana** for the edit step. Nano Banana is also the best at character/style consistency across a multi-image edit sequence — perfect when iterating on a series.
+
+### Worked example — "edit this Victorian etching to make the cat smug"
+
+```bash
+# Find the source image UUID in the user's gallery first.
+ah_curl GET /agents/v1/images/generated?limit=20&sort=newest
+# Pick the UUID of the design you want to edit. Substitute it literally below.
+
+ah_curl POST /agents/v1/images/generate -d '{
+  "prompt": "Same Victorian etching of a cat, but with a deeply smug, self-satisfied expression. Whiskers held high. Faintly amused eyes. Keep all other composition elements identical (the moth, the gilt frame, the ornate background).",
+  "source": "Nano Banana",
+  "source_image_uuid": "abc-123-def-456",
+  "size": "1024x1024"
+}'
+```
+
+Response shape is identical to text-to-image: `{"generated_image": {"uuid": "...", "url": "..."}}`. The new image is a fresh row in the gallery, linked to the source via `source_image_id` so it shows up under the `?edited=true` filter on the listing endpoint.
+
+### Multi-image edit (combine reference images)
+
+```bash
+# "Put the character from image A wearing the outfit from image B"
+ah_curl POST /agents/v1/images/generate -d '{
+  "prompt": "The character from the first image, wearing the outfit from the second image, full body, clean white background.",
+  "source": "Nano Banana",
+  "source_image_uuid": "<character-uuid>",
+  "additional_image_uuids": ["<outfit-uuid>"],
+  "size": "1024x1024"
+}'
+```
+
+Nano Banana handles this best (up to 9 reference images on the wider Replicate-routed equivalent, but the agent API caps at the platform-supported set). OpenAI also works for 2-3 image combinations.
+
+### When the user says "iterate on this"
+
+Default to img2img-via-gallery mode (mode 2 in the table above). It's the cheapest in tokens (no upload), preserves the lineage in the gallery, and lets the user re-target their next edit at either the original OR the latest iteration. Confirm with the user which design they want to iterate on if there are multiple recent candidates.
+
+---
+
 ## 6. Color discipline — max 4 colors per design
 
 More than 4 color variants per design creates SKU sprawl that hurts conversion. Pick the 4 best colors for the design and stop.

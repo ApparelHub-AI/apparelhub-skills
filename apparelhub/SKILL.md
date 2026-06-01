@@ -141,6 +141,7 @@ Before executing a workflow, scan this tree. Loading the right reference up fron
 | If the task involves… | Read FIRST |
 |---|---|
 | Generating ANY design image | `references/design-rules.md` — AI prompt anti-patterns, transparency, vision-verification of text |
+| **Editing / iterating on an existing design** (user says "make the cat smug", "redo this in landscape", "use this as a starting point") | `references/design-rules.md` section 5b — `POST /images/generate` doubles as the img2img endpoint via `source_image_uuid` or multipart `images=@...`. Only Nano Banana and OpenAI support edit; Replicate-backed sources 422. |
 | Standard apparel (tees, hoodies, tanks, sweatshirts) | `references/product-creation-pipeline.md` |
 | **Embroidered apparel** (Champion Anorak, polos, embroidered hats, jackets) | `references/embroidery.md` — the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from Printful. |
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` — edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
