@@ -60,10 +60,23 @@ ah_curl PATCH /agents/v1/product/abc-123 -d '{"display_image":"https://..."}'
 ah_curl DELETE /agents/v1/product/abc-123
 ```
 
-### Key not set?
+### Start every session with `ah_check`
 
-`ah_curl` exits 2 with a clear error if `APPARELHUB_API_KEY` is missing. Use that as your auth check — don't echo the variable yourself (the echo command would contain expansion and prompt). Tell the user:
-> You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=ah_xxx...`
+Run `ah_check` as the FIRST call of any session. It verifies that `APPARELHUB_API_KEY` is set AND valid against the live API, then prints a masked confirmation line.
+
+```bash
+ah_check
+```
+
+Exit codes:
+- **0** — key is set and valid. Output looks like `ah_check: ok (key ah_xxxx...yyyy)`. Proceed.
+- **2** — key is not set in the environment. Tell the user:
+  > You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=ah_xxx...`
+- **3** — key is set but rejected (401/403). Likely revoked, expired, or from the wrong environment. Tell the user to check `https://apparelhub.ai/developer/api-keys`.
+
+**Do not echo the key yourself.** `echo "${APPARELHUB_API_KEY:?...}"` contains shell expansion (`${...}`) and will prompt on every invocation regardless of allowlist. `ah_check` is the prompt-free equivalent that also validates against the platform.
+
+(`ah_curl` itself also exits 2 on a missing key — so even if you skip `ah_check`, your first real API call surfaces the same error. The advantage of `ah_check` is catching it BEFORE you've started a multi-step workflow.)
 
 ### Spec lookup
 

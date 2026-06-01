@@ -14,7 +14,9 @@ apparelhub-skills/
 └── apparelhub/
     ├── SKILL.md                              # Router — loaded on every invocation
     ├── scripts/
+    │   ├── ah_check                          # Auth precondition — verify key is set + valid (run first each session)
     │   ├── ah_curl                           # Agent API wrapper — hides $APPARELHUB_API_KEY from command line
+    │   ├── install_path.sh                   # One-time PATH setup (detects bash/zsh/fish, idempotent)
     │   └── make_transparent.py               # Phase 2 keying tool (auto-chroma, enclosed sweep, despill)
     ├── references/
     │   ├── product-creation-pipeline.md      # 7-phase workflow detail
@@ -46,10 +48,10 @@ git clone https://github.com/ApparelHub-AI/apparelhub-skills.git ~/code/apparelh
 mkdir -p ~/.claude/skills
 ln -s ~/code/apparelhub-skills/apparelhub ~/.claude/skills/apparelhub
 
-# Optional but recommended: add the scripts dir to your PATH so the agent
-# can invoke `ah_curl` and `make_transparent.py` by bare name. This is the
-# cleanest match for the allowlist patterns in settings.recommended.json.
-echo 'export PATH="$HOME/.claude/skills/apparelhub/scripts:$PATH"' >> ~/.zshrc  # or .bashrc
+# One-time: put the scripts dir on PATH so the agent can invoke `ah_check`,
+# `ah_curl`, and `make_transparent.py` by bare name. Idempotent; detects
+# bash / zsh / fish automatically.
+bash ~/.claude/skills/apparelhub/scripts/install_path.sh
 ```
 
 Restart Claude Code; the skill is available next session.
@@ -64,6 +66,8 @@ By default Claude Code asks for confirmation before every `curl`, `python3`, and
 {
   "permissions": {
     "allow": [
+      "Bash(ah_check)",
+      "Bash(*apparelhub/scripts/ah_check)",
       "Bash(ah_curl GET *)",
       "Bash(ah_curl POST *)",
       "Bash(ah_curl PATCH *)",
@@ -130,7 +134,8 @@ The skill talks to ApparelHub's Agent API:
 
 ## What the skill covers
 
-- Prompt-free Agent API access via the packaged `scripts/ah_curl` wrapper (hides `$APPARELHUB_API_KEY` so Claude Code's expansion check doesn't fire)
+- Prompt-free Agent API access via `scripts/ah_check` (start-of-session auth probe) + `scripts/ah_curl` (per-call wrapper) — both hide `$APPARELHUB_API_KEY` so Claude Code's expansion check doesn't fire
+- One-time PATH setup via `scripts/install_path.sh` (detects bash / zsh / fish, idempotent)
 - AI-generated apparel design (Nano Banana, Seedream 4.0/4.5, Flux 1.1 Pro, OpenAI, Google Imagen 4)
 - Local transparency processing via the packaged `scripts/make_transparent.py` (auto chroma detect, enclosed-region sweep for letter holes, optional `--despill` and `--dominance` modes, pre-multiplied white)
 - Mockup generation via Printful + Printify
@@ -147,6 +152,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.5 | 2026-06-01 | New `scripts/ah_check` — start-of-session auth probe (verifies key is set AND valid, prints masked confirmation, distinguishes missing vs revoked). Replaces the `echo "${APPARELHUB_API_KEY:?...}"` pattern that still tripped expansion prompts in v1.4. New `scripts/install_path.sh` — one-time PATH setup that detects bash / zsh / fish, idempotent, replaces the manual `echo ... >> ~/.bashrc` instruction. SKILL.md auth section + Install section updated. |
 | 1.4 | 2026-06-01 | Packaged `scripts/ah_curl` Agent API wrapper — hides `$APPARELHUB_API_KEY` from the command line so Claude Code's `simple_expansion` check stops prompting on every call. Rewrites SKILL.md auth section + all 7 references + all 3 examples to invoke `ah_curl METHOD PATH` with literal-value substitution (no shell variables for captured UUIDs). `settings.recommended.json` extended with `ah_curl` patterns. New PATH setup step in Install. |
 | 1.3 | 2026-06-01 | Packaged `scripts/make_transparent.py` keying tool (replaces inline Pillow snippets). `settings.recommended.json` for permission-prompt reduction. Phase 2 reference + design rules updated to invoke the script by path. Auto chroma detection for AI-generated greens that aren't exactly `#00FF00`. |
 | 1.2 | 2026-06-01 | Restructured to parent + references pattern. Added embroidery, all-over print, payment authority, error handling, AI prompt anti-patterns. Three full end-to-end examples. Fixed OpenAPI spec URL. |

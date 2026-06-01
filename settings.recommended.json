@@ -1,6 +1,8 @@
 {
   "permissions": {
     "allow": [
+      "Bash(ah_check)",
+      "Bash(*apparelhub/scripts/ah_check)",
       "Bash(ah_curl GET *)",
       "Bash(ah_curl POST *)",
       "Bash(ah_curl PATCH *)",
