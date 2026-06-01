@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -sS https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS -X POST https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS -X PATCH https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS -X PUT https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS -X DELETE https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/*)",
+      "Bash(jq:*)",
+      "Bash(python3 *apparelhub/scripts/make_transparent.py *)",
+      "Bash(python3 /tmp/*)",
+      "Bash(getent hosts *)"
+    ]
+  }
+}

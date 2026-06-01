@@ -53,37 +53,32 @@ Don't silently make this call.
 
 **This phase is COMPUTE work on your machine, NOT an API call.** The platform's `/transform` endpoint just stores whatever bytes you upload — it does NOT do flood-fill. You do it locally before uploading.
 
-### Step 2a: Local processing with Pillow
+### Step 2a: Local processing with the packaged script
 
-```python
-from PIL import Image
-import requests
-from io import BytesIO
+Use the bundled helper at `scripts/make_transparent.py` (relative to this skill's base directory). It does border flood-fill + an enclosed-region sweep (so letter holes go transparent), auto-detects the actual chroma color from the corners (AI green is rarely exactly `#00FF00`), writes pre-multiplied white to avoid halos, and can emit a dark-background preview. It is the single, reviewable entry point for this step — invoke it BY PATH so it stays inside the whitelist (see `settings.recommended.json`); do NOT paste an inline `python3 -c`/heredoc version, which would prompt on every run.
 
-# Download the generated image (has solid green #00FF00 background)
-img = Image.open(BytesIO(requests.get(image_url).content)).convert('RGBA')
-w, h = img.size
+```bash
+# Download the generated image (it has a solid green background)
+curl -sS "$IMAGE_URL" -o /tmp/design_green.png
 
-# Flood-fill the green background
-# Tolerance accommodates anti-aliased edges
-target = (0, 255, 0)
-tolerance = 60
-
-def color_match(p, t, tol):
-    return all(abs(p[i] - t[i]) < tol for i in range(3))
-
-# Build new pixel data — transparent where it matches background, opaque otherwise
-new_data = []
-for r, g, b, a in img.getdata():
-    if color_match((r, g, b), target, tolerance):
-        # Pre-multiplied white: when Printful flattens, it composites against white not black
-        new_data.append((255, 255, 255, 0))
-    else:
-        new_data.append((r, g, b, a))
-img.putdata(new_data)
-
-img.save('/tmp/design_transparent.png', 'PNG')
+# Strip the background -> true RGBA. $SKILL_DIR is this skill's base directory.
+# Leave the script path UNQUOTED so it matches the allowlist pattern
+# `Bash(python3 *apparelhub/scripts/make_transparent.py *)` (the standard
+# ~/.claude/skills/apparelhub install path has no spaces).
+python3 $SKILL_DIR/scripts/make_transparent.py \
+    /tmp/design_green.png /tmp/design_transparent.png \
+    --preview /tmp/design_preview.jpg
 ```
+
+It auto-detects the chroma and prints `corner alpha [0, 0, 0, 0] (want all 0)` plus a transparency %. Then **look at `/tmp/design_preview.jpg`** before continuing — that's your no-halo, no-leftover-green gate.
+
+Useful flags:
+- `--dominance` — for muted / desaturated / dark green screens (e.g. corners come back like `#52C06E`, `#95D052`). Uses a "green dominates" test instead of a color box; reach for this if the default leaves green fringe or the corner-alpha warning fires.
+- `--despill` — neutralize a faint green rim on anti-aliased edges.
+- `--chroma 00FF00` — force a specific background color instead of auto-detect.
+- `--tolerance N` — widen/narrow the color-box match (default 90).
+
+The script exits non-zero and warns if the corners aren't fully transparent — if that happens, re-run with `--dominance` (and optionally `--despill`).
 
 ### Step 2b: Upload the processed bytes via the transform endpoint
 
@@ -99,10 +94,12 @@ Returns a NEW image UUID + URL with true RGBA transparency. **Use the NEW UUID f
 
 ### Phase 2 failure modes worth recognizing
 
-- **Letter loops not transparent.** The inside of B, e, d, M, a, etc. The flood-fill above only reaches connected exterior regions. For text designs, do a second pass: any pixel still matching the background color anywhere in the image becomes transparent too.
-- **White halos around edges.** Caused by skipping pre-multiplication. The `(255, 255, 255, 0)` in the snippet prevents this.
-- **Faint green ring around the silhouette.** Tolerance too low for anti-aliased edges. Raise `tolerance` from 60 → 80-90.
-- **Checkerboard pattern visible on the mockup.** The AI baked a fake checkerboard into RGB pixels instead of producing transparency. Re-do Phase 2 with the right target color (often the AI used a SLIGHTLY different green than `#00FF00` — sample the actual color from a corner pixel).
+The script already handles the first three automatically — they're listed so you recognize them if you ever process an image by hand:
+
+- **Letter loops not transparent.** The inside of B, e, d, M, a, etc. A plain border flood-fill only reaches connected exterior regions. The script's enclosed-region sweep clears these (disable only with `--keep-enclosed`).
+- **White halos around edges.** Caused by skipping pre-multiplication. The script writes cleared pixels as `(255, 255, 255, 0)` so Printful's flatten-against-white leaves no dark rim.
+- **Faint green ring around the silhouette.** Anti-aliased edges just outside the match window. Add `--despill`, and/or switch to `--dominance`.
+- **Checkerboard pattern visible on the mockup.** The AI baked a fake checkerboard into RGB pixels instead of leaving a solid background — this is a *generation* failure, not a Phase 2 one. Regenerate the design with a clean solid green background; no amount of keying fixes baked-in checkerboard.
 
 ---
 
