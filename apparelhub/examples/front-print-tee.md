@@ -113,38 +113,52 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
 
 Response includes `job_uuid`. Capture it.
 
-Poll until the job finishes:
+Wait for the job to finish AND for `preview_url` ingestion in ONE call via the packaged script:
+
 ```bash
-# Substitute literal job UUID.
-ah_curl GET /agents/v1/merchandise/product/preview/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/job/<job_uuid>
-# Repeat every 5s until "status": "completed".
+# Substitute literal job UUID. Default polls every 8s, 30-minute timeout.
+ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
 ```
+
+The script handles BOTH completion phases (provider render finish + our S3 ingestion catching up) and writes the final response to `/tmp/preview_job.json`. Do NOT write an inline `for` loop with `$(...)` substitution — that trips the expansion check on every iteration.
 
 ---
 
-## Phase 3.5 — Wait for preview_url ingestion + verify
+## Phase 3.5 — Visual verification
 
-`status: completed` is not the end. Our S3 ingestion may still be running — `preview_url` will be NULL on the preview rows until then.
+Extract the black front URL with `ah_pick_provider_url`, then download for inspection:
 
 ```bash
-# Substitute literal job UUID. Poll every 8s until at least one row has preview_url != null.
-ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+ah_pick_provider_url /tmp/preview_job.json black front
+# Returns: https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<uuid>.png
+
+curl -sS -o /tmp/mockup_check.png "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<paste-uuid-from-above>.png"
 ```
 
-Once at least one row is ready, find the best front-view mockup (prefer black/navy/midnight for contrast). The `provider_preview_ref_url` filename contains color + angle like `unisex-staple-t-shirt-black-front-abc.png` — use that to classify.
-
-Pick a dark front-view URL, save it in your reasoning context. Download to `/tmp` and visually verify:
+Open `/tmp/mockup_check.png` and verify:
 - Cactus design renders correctly (not cut off)
 - No white halos around the silhouette
 - Color contrast acceptable on black
 
-If anything looks wrong, regenerate the design before continuing.
+If anything looks wrong, regenerate the design before continuing. Never ship a broken mockup to product creation — manufacturing follows the mockup.
+
+---
+
+## Phase 4.0 — Build display_image + gallery_images recommendation
+
+One call:
+
+```bash
+ah_classify_previews /tmp/preview_job.json --recommend /tmp/picks.json
+```
+
+This prints the full (COLOR, ANGLE, URL) table AND writes `/tmp/picks.json` with the recommended dark-color front mockup as `display_image` plus a curated gallery (one front per color darkest-first, then backs). Read the literal URLs from `/tmp/picks.json` and paste them into the Phase 4 product create body.
 
 ---
 
 ## Phase 4 — Create the product
 
-Substitute literal values throughout: the transparent image UUID + URL from Phase 2, the job UUID from Phase 3, the chosen display mockup URL from Phase 3.5, and the back-view + alt-color mockup URLs for the gallery.
+Substitute literal values throughout: the transparent image UUID + URL from Phase 2, the job UUID from Phase 3, and the `display_image` + `gallery_images` URLs from `/tmp/picks.json` (Phase 4.0).
 
 ```bash
 ah_curl POST /agents/v1/product/create -d '{

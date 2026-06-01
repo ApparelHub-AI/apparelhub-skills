@@ -78,6 +78,21 @@ Exit codes:
 
 (`ah_curl` itself also exits 2 on a missing key — so even if you skip `ah_check`, your first real API call surfaces the same error. The advantage of `ah_check` is catching it BEFORE you've started a multi-step workflow.)
 
+### Other packaged helpers (use these instead of inline bash)
+
+The skill ships a small set of additional scripts that exist for the same reason `ah_curl` does — they keep the agent's visible command line expansion-free and single-target so Claude Code's safety checks don't fire on every call. Always invoke them by name or full path, NEVER reproduce their logic inline.
+
+| Script | Replaces | When to invoke |
+|---|---|---|
+| `ah_poll_mockup` | A `for`/`while` loop polling `/merchandise/product/preview/<provider>/job/<job>` with `status=...; if "$s" = ...` checks | Phase 3 — after `POST /merchandise/product/preview` returns a `job_uuid`. Polls until the job is completed AND at least one preview row has `preview_url` populated, in ONE call. |
+| `ah_classify_previews` | A `python3 -c "import json; ..."` heredoc parsing the preview rows by color + angle | Phase 4.0 — after `ah_poll_mockup` succeeds. Classifies all preview rows AND (with `--recommend`) writes a JSON file with the best `display_image` + a curated `gallery_images` list ready to paste into the product create body. |
+| `ah_pick_provider_url` | A `jq` filter walking the previews array for a specific color+angle | Anywhere you need ONE specific mockup URL (e.g., "download the black front mockup to verify visually before product creation"). |
+| `make_transparent.py` | Inline Pillow `python3 -c "..."` snippets | Phase 2 — local transparency processing (see `references/design-rules.md`). |
+
+All four (plus `ah_curl` and `ah_check`) live in `scripts/` and are matched by the patterns in `settings.recommended.json`. The pipeline reference (`references/product-creation-pipeline.md`) and the end-to-end examples in `examples/` show concrete invocations.
+
+**General rule:** if you find yourself writing more than ONE shell line for a workflow step — a `for` loop, a `&&`-chained pair of commands, a `python3 -c` heredoc — stop and check whether there's a packaged script for it. Inline multi-line bash WILL trip the simple_expansion or multi-redirect checks regardless of how broad the allowlist is.
+
 ### Spec lookup
 
 The canonical OpenAPI spec lives at `https://api.apparelhub.ai/agents/v1/openapi.json` — fetch it the same way as any other GET:

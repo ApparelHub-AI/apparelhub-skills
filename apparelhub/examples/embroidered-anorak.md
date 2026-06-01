@@ -144,15 +144,22 @@ Capture `job_uuid`.
 
 ## Phase 3.5 — Poll + verify
 
-```bash
-# Poll job status every 5s until status: completed. Substitute literal job UUID.
-ah_curl GET /agents/v1/merchandise/product/preview/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/job/<job_uuid>
+One call handles BOTH completion phases (provider render + S3 ingestion):
 
-# Then poll for S3 ingestion every 8s until at least one preview_url != null.
-ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+```bash
+ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
 ```
 
-Pick a front-view mockup URL. Visually verify:
+Writes the final response to `/tmp/preview_job.json`. Then extract the black front URL:
+
+```bash
+ah_pick_provider_url /tmp/preview_job.json black front
+# Returns the dark-anorak front URL for visual inspection.
+
+curl -sS -o /tmp/mockup_check.png "https://.../<paste-url-from-above>"
+```
+
+Open `/tmp/mockup_check.png` and verify:
 - Crest sits on the chest-left correctly (not too high, not too low)
 - Colors render as expected on the dark anorak
 - Design isn't TOO small to read at a normal viewing distance

@@ -16,6 +16,9 @@ apparelhub-skills/
     ├── scripts/
     │   ├── ah_check                          # Auth precondition — verify key is set + valid (run first each session)
     │   ├── ah_curl                           # Agent API wrapper — hides $APPARELHUB_API_KEY from command line
+    │   ├── ah_poll_mockup                    # Phase 3 wait — polls job + S3 ingestion in one call (no for-loop expansion)
+    │   ├── ah_classify_previews              # Phase 4.0 — parses preview rows by color/angle, writes display+gallery picks
+    │   ├── ah_pick_provider_url              # Extract one URL by color+angle from a preview JSON (no jq filter needed)
     │   ├── install_path.sh                   # One-time PATH setup (detects bash/zsh/fish, idempotent)
     │   └── make_transparent.py               # Phase 2 keying tool (auto-chroma, enclosed sweep, despill)
     ├── references/
@@ -86,6 +89,12 @@ By default Claude Code asks for confirmation before every `curl`, `python3`, and
       "Bash(curl -sS https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/*)",
       "Bash(curl -sS -o /tmp/* https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/*)",
       "Bash(jq:*)",
+      "Bash(ah_poll_mockup *)",
+      "Bash(*apparelhub/scripts/ah_poll_mockup *)",
+      "Bash(ah_classify_previews *)",
+      "Bash(*apparelhub/scripts/ah_classify_previews *)",
+      "Bash(ah_pick_provider_url *)",
+      "Bash(*apparelhub/scripts/ah_pick_provider_url *)",
       "Bash(python3 *apparelhub/scripts/make_transparent.py *)",
       "Bash(python3 /tmp/*)",
       "Bash(getent hosts *)"
@@ -152,6 +161,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.7 | 2026-06-01 | Three new packaged scripts kill the remaining inline-bash expansion prompts surfaced during Test 2 validation: `ah_poll_mockup` (collapses Phase 3 job-status poll + Phase 3.5 S3-ingestion poll into one call against the job-status endpoint), `ah_classify_previews` (parses preview rows by color + angle from the provider CDN filename slug; `--recommend` writes a JSON with `display_image` + curated `gallery_images` ready to paste literally into product create), `ah_pick_provider_url` (extracts one URL by color+angle, no jq filter needed). Content fix: removed all references to `GET /merchandise/product/preview-job/<job>/previews` — that listing endpoint returned 0 rows in the field even after preview_url was populated; the job-status endpoint carries the preview rows directly. `settings.recommended.json` extended with the three new patterns. SKILL.md "Other packaged helpers" section added with a one-line rule of thumb: if you're writing more than one shell line for a workflow step, there's probably a packaged script for it. |
 | 1.6 | 2026-06-01 | Documents the img2img edit modes on `POST /images/generate`. The endpoint is overloaded — same path for text-to-image AND editing, mode determined by whether `source_image_uuid` (JSON) / `images=@...` (multipart) is present. New section 5b in `references/design-rules.md` covers the request shape, the `source_image_uuid` field-name gotcha (NOT `image_uuid`), `additional_image_uuids` for multi-image reference, and the source-compatibility matrix (only Nano Banana + OpenAI support edit; Replicate-backed sources 422). SKILL.md decision tree + Phase 1 reference pointer updated. |
 | 1.5 | 2026-06-01 | New `scripts/ah_check` — start-of-session auth probe (verifies key is set AND valid, prints masked confirmation, distinguishes missing vs revoked). Replaces the `echo "${APPARELHUB_API_KEY:?...}"` pattern that still tripped expansion prompts in v1.4. New `scripts/install_path.sh` — one-time PATH setup that detects bash / zsh / fish, idempotent, replaces the manual `echo ... >> ~/.bashrc` instruction. SKILL.md auth section + Install section updated. |
 | 1.4 | 2026-06-01 | Packaged `scripts/ah_curl` Agent API wrapper — hides `$APPARELHUB_API_KEY` from the command line so Claude Code's `simple_expansion` check stops prompting on every call. Rewrites SKILL.md auth section + all 7 references + all 3 examples to invoke `ah_curl METHOD PATH` with literal-value substitution (no shell variables for captured UUIDs). `settings.recommended.json` extended with `ah_curl` patterns. New PATH setup step in Install. |

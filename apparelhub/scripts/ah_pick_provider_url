@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""
+ah_pick_provider_url — extract one preview URL from a preview-job JSON
+blob by color + angle, with no shell variables on the agent's command line.
+
+Usage:
+    ah_pick_provider_url <preview_job_json_path> <color> <angle>
+
+Matches case-insensitively. Color matching is substring-based so
+"black" matches "heather midnight navy black" as well as "black"; pass
+the most distinctive color word the merchant cares about ("midnight",
+"navy", "white", etc.) for precise targeting.
+
+Prefers preview_url (our S3 mirror) over provider_preview_ref_url
+(the provider's CDN URL).
+
+Prints just the URL on stdout. No prefix, no quotes, no trailing space —
+suitable to paste literally into the next API call.
+
+Exit codes:
+    0 — found a match, URL printed
+    1 — no match, input file unreadable, or input has no previews
+    2 — bad CLI args
+"""
+
+from __future__ import annotations
+
+import json
+import sys
+from urllib.parse import urlparse
+
+# Re-use the parsing logic from ah_classify_previews if it's a sibling
+# script, otherwise duplicate the minimal parser inline. We choose
+# inline duplication: it's ~30 lines and keeps each script independently
+# debuggable without coupling.
+
+ANGLE_TOKENS = ["front", "back", "left", "right", "flat", "side"]
+
+GARMENT_SLUG_KEYWORDS = {
+    "tee", "tshirt", "shirt", "hoodie", "sweatshirt", "tank", "anorak",
+    "polo", "pullover", "crewneck", "long", "short", "sleeve", "staple",
+    "unisex", "men", "mens", "women", "womens", "youth", "kids", "premium",
+    "essential", "classic", "soft", "heavyweight", "lightweight", "fleece",
+    "pillow", "throw", "doormat", "rug", "mat", "mug", "tote", "bag", "case",
+    "phone", "tag", "luggage", "bottle", "water", "champion", "packable",
+    "comfort", "colors", "bella", "canvas", "gildan", "next", "level",
+    "district", "stella", "muser",
+}
+
+
+def parse_color_angle(url: str) -> tuple[str | None, str | None]:
+    if not url:
+        return None, None
+    try:
+        path = urlparse(url).path
+    except Exception:
+        return None, None
+    filename = path.rsplit("/", 1)[-1]
+    import re
+    stem = re.sub(r"\.[a-zA-Z0-9]+$", "", filename)
+    parts = stem.split("-")
+    if not parts:
+        return None, None
+    angle_idx = -1
+    angle = None
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() in ANGLE_TOKENS:
+            angle_idx = i
+            angle = parts[i].lower()
+            break
+    if angle_idx < 0:
+        return None, None
+    color_words = []
+    for i in range(angle_idx - 1, -1, -1):
+        token = parts[i].lower()
+        if not token or token.isdigit():
+            continue
+        if token in GARMENT_SLUG_KEYWORDS:
+            break
+        color_words.insert(0, token)
+        if len(color_words) >= 4:
+            break
+    if not color_words:
+        return None, angle
+    return " ".join(color_words), angle
+
+
+def extract_previews(payload: dict) -> list:
+    candidates = (
+        payload.get("previews"),
+        (payload.get("data") or {}).get("previews") if isinstance(payload.get("data"), dict) else None,
+        (payload.get("job") or {}).get("previews") if isinstance(payload.get("job"), dict) else None,
+    )
+    return next((c for c in candidates if isinstance(c, list)), [])
+
+
+def main() -> int:
+    if len(sys.argv) != 4:
+        sys.stderr.write(
+            "usage: ah_pick_provider_url <preview_job_json_path> <color> <angle>\n"
+        )
+        return 2
+
+    json_path, want_color, want_angle = sys.argv[1], sys.argv[2].lower(), sys.argv[3].lower()
+
+    try:
+        with open(json_path, "r") as fh:
+            payload = json.load(fh)
+    except FileNotFoundError:
+        sys.stderr.write(f"ah_pick_provider_url: file not found: {json_path}\n")
+        return 1
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"ah_pick_provider_url: not valid JSON: {e}\n")
+        return 1
+
+    rows = extract_previews(payload)
+    if not rows:
+        sys.stderr.write("ah_pick_provider_url: no previews[] array found\n")
+        return 1
+
+    if want_angle not in ANGLE_TOKENS:
+        sys.stderr.write(
+            f"ah_pick_provider_url: angle must be one of {', '.join(ANGLE_TOKENS)}\n"
+        )
+        return 2
+
+    for row in rows:
+        ref_url = row.get("provider_preview_ref_url") or row.get("preview_url") or ""
+        color, angle = parse_color_angle(ref_url)
+        if not color or not angle:
+            continue
+        if angle != want_angle:
+            continue
+        if want_color not in color:
+            continue
+        url = row.get("preview_url") or row.get("provider_preview_ref_url")
+        if not url:
+            continue
+        print(url)
+        return 0
+
+    sys.stderr.write(
+        f"ah_pick_provider_url: no preview matched color={want_color}, angle={want_angle}\n"
+    )
+    return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

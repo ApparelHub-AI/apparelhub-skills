@@ -183,29 +183,38 @@ Notes:
 - Include ALL variant_ids across ALL colors in ONE preview call (15 IDs for 3 colors × 5 sizes here). The provider returns separate mockups per color in the same job.
 - Missing any template field → 404 with `KeyError` or generic Exception from `merchandise.py`. Common cause of "Error building the standard response for product preview." Always pass the full template object.
 
-Returns a `job_uuid`. Mockup generation is **async** — poll until complete:
+Returns a `job_uuid`. Mockup generation is **async**. Use the packaged `ah_poll_mockup` script — DO NOT write an inline `for` loop with `$(...)` command substitution; the expansion check will prompt on every iteration.
 
 ```bash
-ah_curl GET /agents/v1/merchandise/product/preview/<provider_uuid>/job/<job_uuid>
+ah_poll_mockup <provider_uuid> <job_uuid>
 ```
+
+The script polls `GET /merchandise/product/preview/<provider_uuid>/job/<job_uuid>` every 8 seconds until the job is `completed` AND at least one preview row has a populated `preview_url` (handles BOTH completion phases — provider render finish AND our S3 ingestion catching up — in one call). It prints a one-line status per poll and saves the final response to `/tmp/preview_job.json`.
+
+Default timeout is 30 minutes. Useful flags:
+- `--timeout 600` — shorter cap if you want to fail fast
+- `--interval 5` — poll more aggressively
+- `--out /tmp/some_other_path.json` — write to a non-default path
+- `--min-ready 4` — wait until 4+ previews have `preview_url` (default is 1)
+
+**Note: there is no separate `/preview-job/<job>/previews` listing endpoint to call.** The job-status endpoint above carries the preview rows once they're ingested. Older docs may reference the listing endpoint; it returned 0 rows in the field even after the job endpoint reported preview_url populated. Stick with `ah_poll_mockup` against the job endpoint.
 
 ---
 
 ## Phase 3.5 — Mockup verification (MANDATORY)
 
-When the job status is `completed`, **DO NOT immediately proceed to product creation.** The pipeline has TWO completion phases:
-
-1. Job status = `completed` means the provider's render job finished, BUT
-2. The `preview_url` on each preview row may still be NULL — that's our S3 ingestion catching up. Can take 20+ minutes.
-
-**Poll until at least one preview has a non-null `preview_url`:**
+After `ah_poll_mockup` exits 0, **visually inspect at least one mockup** before product creation. Pick a dark-color front URL from `/tmp/preview_job.json` (you can use `ah_pick_provider_url` to extract one), download with curl, and view it.
 
 ```bash
-ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+# Print the black front URL on stdout (substitute the literal value into the next curl).
+ah_pick_provider_url /tmp/preview_job.json black front
+# Returns: https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<uuid>.png
+
+# Download for visual inspection (paste the URL literally — don't capture it in $VAR):
+curl -sS -o /tmp/mockup_check.png "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<the-uuid-from-above>.png"
 ```
 
-Once `preview_url` is populated, **visually inspect the mockup**. Download with curl and view, or hand to vision tools. Check for:
-
+Check for:
 - Design renders correctly (not cut off, not distorted)
 - Text is legible and spelled correctly
 - No white halos around transparent edges
@@ -218,35 +227,44 @@ If anything looks wrong, FIX the design and re-mockup before continuing. Never s
 
 ## Phase 4.0 — Pick `display_image` + build `gallery_images` from preview rows
 
-Before calling product create, query the preview job's preview rows to pick the BEST mockup for the product thumbnail (`display_image`) AND build a curated gallery (`gallery_images`). The platform picks sensible defaults if you skip this; explicit selection gives the merchant a better product page out of the gate.
+Use the packaged `ah_classify_previews` script with `--recommend` to do this in one call:
 
 ```bash
-ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
-# Parse the response JSON in your reasoning context. Don't shove it into a
-# shell variable — you'll need to reference individual preview URLs literally
-# in the product create body anyway.
+ah_classify_previews /tmp/preview_job.json --recommend /tmp/picks.json
 ```
 
-Each preview row has:
-- `uuid` — apparelhub's S3-stored copy ID
-- `preview_url` — apparelhub's S3 URL (may be NULL during the ingestion race; see Phase 3.5)
-- `provider_preview_ref_url` — the provider's CDN URL; filename contains color + angle (e.g., `unisex-staple-t-shirt-black-front-abc123.png`)
-- `thumbnail_url` — 500×500 thumb
+This prints a `(COLOR, ANGLE, URL)` table for every preview row AND writes `/tmp/picks.json` with the agent's recommended `display_image` and a curated `gallery_images` list ready to paste literally into the product create body.
 
-### Pick `display_image`
+`/tmp/picks.json` looks like:
 
-1. Prefer FRONT-view (provider_preview_ref_url contains `-front-` in filename)
-2. Among front-views, prefer DARK shirts (black, navy, charcoal, midnight) — best contrast for showing the design
-3. Prefer rows with non-null `preview_url` (our S3 mirror) over those with only `provider_preview_ref_url`
-4. Use that row's `preview_url` (or fall back to `provider_preview_ref_url`) as `display_image`
+```json
+{
+  "display_image": "https://.../black-front-best.png",
+  "gallery_images": [
+    "https://.../black-front....png",
+    "https://.../navy-front....png",
+    "https://.../white-front....png",
+    "https://.../black-back....png",
+    "https://.../navy-back....png"
+  ],
+  "rationale": "Picked black front for dark-color contrast; 3 front + 3 back in gallery, darkest first."
+}
+```
 
-### Build `gallery_images`
+**Read those URLs from `/tmp/picks.json` and paste them as LITERAL strings into the Phase 4 product create body.** Don't capture them in shell variables — paste the URL text directly.
 
-1. Group previews by color (parse from `provider_preview_ref_url` filename)
-2. For each color, take ONE front-view; add to gallery
-3. Order: darkest color FIRST (matches the `display_image` choice), then remaining colors
-4. Then append back-views of each color
-5. Cap at ~10 images
+### What the recommendation algorithm does
+
+- `display_image`: front-view of the darkest available color (black > midnight > navy > charcoal > forest > dark > olive > burgundy > maroon, then non-dark colors). Prefers our S3 mirror (`preview_url`) over the provider CDN.
+- `gallery_images`: one front-view per unique color (darkest first, matching `display_image`'s color), then one back-view per unique color in the same order. Capped at 10 entries.
+
+### When to override the recommendation
+
+If the merchant has a specific color preference for the storefront thumbnail ("show the white version as the main image"), use `ah_pick_provider_url /tmp/preview_job.json white front` to extract that URL and pass it as `display_image` instead. The recommendation is a sensible default, not a constraint.
+
+### What if `--recommend` returned `display_image: null`?
+
+Means no preview rows matched the front/back filename pattern. Run `ah_classify_previews /tmp/preview_job.json` without `--recommend` to see the raw rows — provider may be using a non-standard slug. Fall back to picking one manually from the table.
 
 ---
 

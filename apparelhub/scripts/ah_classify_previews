@@ -1,0 +1,356 @@
+#!/usr/bin/env python3
+"""
+ah_classify_previews — parse a preview-job JSON blob (typically the file
+written by ah_poll_mockup) and classify each row by color + angle, parsed
+from the provider's CDN filename slug.
+
+Usage:
+    ah_classify_previews <preview_job_json_path>
+                         [--recommend OUT_PATH]
+                         [--limit N]
+
+Prints a table of (color, angle, url) per preview row.
+
+If --recommend is passed, also writes a JSON file with:
+    {
+      "display_image": "<best dark-color front URL>",
+      "gallery_images": [<one front per color, dark first, then backs>],
+      "rationale": "<one-line explanation>"
+    }
+
+The agent reads that JSON and pastes the literal URLs into the product
+create body — no shell variables, no command substitution.
+
+Why filename parsing: provider_preview_ref_url comes back like
+    https://files.cdn.printful.com/.../unisex-staple-t-shirt-black-front-abc.png
+The garment slug + color + angle + suffix pattern is stable enough across
+Printful and Printify to make filename parsing the cheapest reliable signal.
+
+Exit codes:
+    0 — parsed successfully (may print 0 rows if input has no previews)
+    1 — bad input file (missing, unreadable, not JSON, no previews array)
+    2 — bad CLI args
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sys
+from collections import OrderedDict
+from urllib.parse import urlparse
+
+# Angle tokens we recognize in provider filenames. Order matters for
+# preference (front-view wins for display_image).
+ANGLE_TOKENS = ["front", "back", "left", "right", "flat", "side"]
+
+# Dark colors we prefer for display_image (higher contrast on the printed
+# design). Ranked rough-darkest first; ties broken by filename order.
+DARK_COLOR_PREFERENCE = [
+    "black",
+    "midnight",
+    "navy",
+    "charcoal",
+    "forest",
+    "dark",
+    "olive",
+    "burgundy",
+    "maroon",
+]
+
+
+def parse_color_angle_from_url(url: str) -> tuple[str | None, str | None]:
+    """Extract (color, angle) tokens from a provider preview URL filename.
+
+    Example:
+        https://...com/unisex-staple-t-shirt-black-front-abc123.png
+        -> ("black", "front")
+
+    Multi-word colors like "heather-midnight-navy" become "heather midnight navy".
+    """
+    if not url:
+        return None, None
+    try:
+        path = urlparse(url).path
+    except Exception:
+        return None, None
+    filename = path.rsplit("/", 1)[-1]
+    # Strip extension
+    stem = re.sub(r"\.[a-zA-Z0-9]+$", "", filename)
+    parts = stem.split("-")
+    if not parts:
+        return None, None
+
+    # Find the LAST occurrence of an angle token (in case the garment slug
+    # happens to contain a homograph).
+    angle_idx = -1
+    angle = None
+    for i in range(len(parts) - 1, -1, -1):
+        if parts[i].lower() in ANGLE_TOKENS:
+            angle_idx = i
+            angle = parts[i].lower()
+            break
+    if angle_idx < 0:
+        return None, None
+
+    # Color = the trailing chunk of words before the angle token. Walk
+    # backwards collecting non-numeric, non-empty words until we hit what
+    # looks like a garment-slug boundary (a known garment keyword) OR we
+    # reach the start.
+    GARMENT_SLUG_KEYWORDS = {
+        "tee",
+        "tshirt",
+        "shirt",
+        "hoodie",
+        "sweatshirt",
+        "tank",
+        "anorak",
+        "polo",
+        "pullover",
+        "crewneck",
+        "long",
+        "short",
+        "sleeve",
+        "staple",
+        "unisex",
+        "men",
+        "mens",
+        "women",
+        "womens",
+        "youth",
+        "kids",
+        "premium",
+        "essential",
+        "classic",
+        "soft",
+        "heavyweight",
+        "lightweight",
+        "fleece",
+        "pillow",
+        "throw",
+        "doormat",
+        "rug",
+        "mat",
+        "mug",
+        "tote",
+        "bag",
+        "case",
+        "phone",
+        "tag",
+        "luggage",
+        "bottle",
+        "water",
+        "champion",
+        "packable",
+        "comfort",
+        "colors",
+        "bella",
+        "canvas",
+        "gildan",
+        "next",
+        "level",
+        "district",
+        "stella",
+        "muser",
+    }
+    color_words: list[str] = []
+    for i in range(angle_idx - 1, -1, -1):
+        token = parts[i].lower()
+        if not token or token.isdigit():
+            continue
+        if token in GARMENT_SLUG_KEYWORDS:
+            break
+        color_words.insert(0, token)
+        # Stop if we've collected 4 tokens — colors are at most ~4 words
+        # ("heather midnight navy", "vintage navy blue heather").
+        if len(color_words) >= 4:
+            break
+    if not color_words:
+        return None, angle
+    return " ".join(color_words), angle
+
+
+def extract_previews(payload: dict) -> list[dict]:
+    """Find the previews[] array regardless of nesting depth (top-level,
+    under data, under job)."""
+    candidates = (
+        payload.get("previews"),
+        (payload.get("data") or {}).get("previews") if isinstance(payload.get("data"), dict) else None,
+        (payload.get("job") or {}).get("previews") if isinstance(payload.get("job"), dict) else None,
+    )
+    return next((c for c in candidates if isinstance(c, list)), [])
+
+
+def best_url_for_row(row: dict) -> str | None:
+    """Prefer our S3 mirror (preview_url) over the provider's CDN. Fall
+    through if only one is present."""
+    return row.get("preview_url") or row.get("provider_preview_ref_url")
+
+
+def is_dark_color(color: str | None) -> bool:
+    if not color:
+        return False
+    return any(dark in color.lower() for dark in DARK_COLOR_PREFERENCE)
+
+
+def dark_rank(color: str | None) -> int:
+    """Lower rank = darker = preferred. Returns large int for non-dark."""
+    if not color:
+        return 999
+    lower = color.lower()
+    for i, dark in enumerate(DARK_COLOR_PREFERENCE):
+        if dark in lower:
+            return i
+    return 999
+
+
+def recommend(rows: list[dict]) -> dict:
+    """Build the display_image + gallery_images recommendation.
+
+    Strategy:
+      - display_image: best dark-color FRONT preview (prefer preview_url
+        over provider_preview_ref_url).
+      - gallery_images: one front-view per unique color (darkest first),
+        then back-views of each color, capped at 10.
+    """
+    fronts: list[tuple[int, str, str, str]] = []  # (dark_rank, color, url, raw_url_pref)
+    backs: list[tuple[int, str, str]] = []
+    seen_front_colors: "OrderedDict[str, None]" = OrderedDict()
+    seen_back_colors: "OrderedDict[str, None]" = OrderedDict()
+
+    for row in rows:
+        ref_url = row.get("provider_preview_ref_url") or row.get("preview_url") or ""
+        color, angle = parse_color_angle_from_url(ref_url)
+        url = best_url_for_row(row)
+        if not url or not color or not angle:
+            continue
+        if angle == "front":
+            fronts.append((dark_rank(color), color, url, ref_url))
+        elif angle == "back":
+            backs.append((dark_rank(color), color, url))
+
+    if not fronts and not backs:
+        return {
+            "display_image": None,
+            "gallery_images": [],
+            "rationale": "No front/back preview rows could be classified.",
+        }
+
+    # Pick display_image: darkest front, fall back to darkest back if no fronts
+    display_image: str | None = None
+    chosen_color: str | None = None
+    if fronts:
+        fronts_sorted = sorted(fronts, key=lambda t: (t[0], t[1]))
+        display_image = fronts_sorted[0][2]
+        chosen_color = fronts_sorted[0][1]
+    elif backs:
+        backs_sorted = sorted(backs, key=lambda t: (t[0], t[1]))
+        display_image = backs_sorted[0][2]
+        chosen_color = backs_sorted[0][1]
+
+    # Build gallery: one front per unique color, darkest first
+    gallery: list[str] = []
+    color_to_front: "OrderedDict[str, str]" = OrderedDict()
+    for _, color, url, _ in sorted(fronts, key=lambda t: (t[0], t[1])):
+        if color not in color_to_front:
+            color_to_front[color] = url
+    gallery.extend(color_to_front.values())
+
+    # Append back-views per color, same ordering
+    color_to_back: "OrderedDict[str, str]" = OrderedDict()
+    for _, color, url in sorted(backs, key=lambda t: (t[0], t[1])):
+        if color not in color_to_back:
+            color_to_back[color] = url
+    gallery.extend(color_to_back.values())
+
+    # Cap at 10
+    gallery = gallery[:10]
+
+    rationale_bits = []
+    if chosen_color:
+        contrast_note = "dark-color contrast" if is_dark_color(chosen_color) else "available color"
+        rationale_bits.append(
+            f"Picked {chosen_color} front for {contrast_note}"
+        )
+    rationale_bits.append(
+        f"{len(color_to_front)} front + {len(color_to_back)} back in gallery, darkest first"
+    )
+    rationale = "; ".join(rationale_bits) + "."
+
+    return {
+        "display_image": display_image,
+        "gallery_images": gallery,
+        "rationale": rationale,
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="ah_classify_previews", description=__doc__)
+    ap.add_argument("json_path")
+    ap.add_argument("--recommend", metavar="OUT_PATH", default=None)
+    ap.add_argument("--limit", type=int, default=None,
+                    help="Truncate the printed table to N rows (recommend output is unaffected)")
+    args = ap.parse_args()
+
+    try:
+        with open(args.json_path, "r") as fh:
+            payload = json.load(fh)
+    except FileNotFoundError:
+        sys.stderr.write(f"ah_classify_previews: file not found: {args.json_path}\n")
+        return 1
+    except json.JSONDecodeError as e:
+        sys.stderr.write(f"ah_classify_previews: not valid JSON: {e}\n")
+        return 1
+    except OSError as e:
+        sys.stderr.write(f"ah_classify_previews: could not read {args.json_path}: {e}\n")
+        return 1
+
+    rows = extract_previews(payload)
+    if not rows:
+        print("ah_classify_previews: no previews[] array found in input")
+        if args.recommend:
+            with open(args.recommend, "w") as fh:
+                json.dump({
+                    "display_image": None,
+                    "gallery_images": [],
+                    "rationale": "Input contained no previews.",
+                }, fh, indent=2)
+        return 0
+
+    # Print the classification table
+    print(f"{'COLOR':<32} {'ANGLE':<6} URL")
+    printed = 0
+    for row in rows:
+        ref_url = row.get("provider_preview_ref_url") or row.get("preview_url") or ""
+        color, angle = parse_color_angle_from_url(ref_url)
+        url = best_url_for_row(row) or "(no url)"
+        color_disp = color or "?"
+        angle_disp = angle or "?"
+        print(f"{color_disp:<32} {angle_disp:<6} {url}")
+        printed += 1
+        if args.limit is not None and printed >= args.limit:
+            remaining = len(rows) - printed
+            if remaining > 0:
+                print(f"... ({remaining} more rows, omitted by --limit)")
+            break
+
+    if args.recommend:
+        rec = recommend(rows)
+        try:
+            with open(args.recommend, "w") as fh:
+                json.dump(rec, fh, indent=2)
+        except OSError as e:
+            sys.stderr.write(f"ah_classify_previews: could not write --recommend {args.recommend}: {e}\n")
+            return 1
+        print("")
+        print(f"Recommendation written to {args.recommend}:")
+        print(f"  display_image: {rec['display_image']}")
+        print(f"  gallery_images: {len(rec['gallery_images'])} entries")
+        print(f"  rationale: {rec['rationale']}")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

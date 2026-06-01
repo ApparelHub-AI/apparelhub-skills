@@ -1,0 +1,159 @@
+#!/usr/bin/env python3
+"""
+ah_poll_mockup — poll a Printful/Printify mockup job until it's completed
+AND at least one preview row has a populated preview_url.
+
+This script collapses what used to be TWO polling phases (status=completed,
+then preview_url ingestion) into ONE call against the job-status endpoint.
+The job endpoint carries both signals — there is NO separate "preview-job
+listing" endpoint to call; that surface returned 0 rows in the field even
+after the job-status endpoint reported preview_url populated.
+
+Usage:
+    ah_poll_mockup <provider_uuid> <job_uuid>
+                   [--timeout SECONDS]   default 1800 (30 min)
+                   [--interval SECONDS]  default 8
+                   [--out PATH]          default /tmp/preview_job.json
+                   [--min-ready N]       default 1
+
+Exit codes:
+    0 — job completed AND >= min-ready previews have preview_url
+    1 — timeout, job failed, or auth/network error
+    2 — APPARELHUB_API_KEY not set, or bad CLI args
+
+Why this exists: inline `for` loops with $(...) command substitution trip
+Claude Code's simple_expansion check on every iteration regardless of
+allowlist. Wrapping the poll in a packaged script keeps the agent's visible
+command line expansion-free.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+API_BASE = "https://api.apparelhub.ai"
+
+
+def fetch_job(provider_uuid: str, job_uuid: str, api_key: str) -> dict:
+    url = (
+        f"{API_BASE}/agents/v1/merchandise/product/preview/"
+        f"{provider_uuid}/job/{job_uuid}"
+    )
+    req = urllib.request.Request(url, headers={"x-api-key": api_key})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = resp.read().decode("utf-8")
+    return json.loads(body)
+
+
+def count_ready_previews(payload: dict) -> tuple[int, int]:
+    """Return (ready_count, total_count) for the previews[] array.
+
+    Defensively handles the previews array living at top-level OR nested
+    under a `data`/`job` key.
+    """
+    candidates = (
+        payload.get("previews"),
+        (payload.get("data") or {}).get("previews") if isinstance(payload.get("data"), dict) else None,
+        (payload.get("job") or {}).get("previews") if isinstance(payload.get("job"), dict) else None,
+    )
+    previews = next((c for c in candidates if isinstance(c, list)), [])
+    total = len(previews)
+    ready = sum(1 for p in previews if isinstance(p, dict) and p.get("preview_url"))
+    return ready, total
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="ah_poll_mockup", description=__doc__)
+    ap.add_argument("provider_uuid")
+    ap.add_argument("job_uuid")
+    ap.add_argument("--timeout", type=int, default=1800)
+    ap.add_argument("--interval", type=int, default=8)
+    ap.add_argument("--out", default="/tmp/preview_job.json")
+    ap.add_argument("--min-ready", type=int, default=1)
+    args = ap.parse_args()
+
+    api_key = os.environ.get("APPARELHUB_API_KEY")
+    if not api_key:
+        sys.stderr.write(
+            "ah_poll_mockup: APPARELHUB_API_KEY not set in environment\n"
+            "                 Generate one at https://apparelhub.ai/developer/api-keys\n"
+            "                 Then: export APPARELHUB_API_KEY=ah_xxx...\n"
+        )
+        return 2
+
+    start = time.monotonic()
+    poll_n = 0
+    last_payload: dict | None = None
+    last_status: str | None = None
+
+    while True:
+        poll_n += 1
+        elapsed = int(time.monotonic() - start)
+        try:
+            payload = fetch_job(args.provider_uuid, args.job_uuid, api_key)
+        except urllib.error.HTTPError as e:
+            sys.stderr.write(
+                f"ah_poll_mockup: HTTP {e.code} from job endpoint "
+                f"(provider={args.provider_uuid}, job={args.job_uuid})\n"
+            )
+            if e.code in (401, 403):
+                sys.stderr.write(
+                    "                 Key rejected — check apparelhub.ai/developer/api-keys\n"
+                )
+            return 1
+        except urllib.error.URLError as e:
+            sys.stderr.write(f"ah_poll_mockup: network failure: {e.reason}\n")
+            return 1
+        except json.JSONDecodeError:
+            sys.stderr.write("ah_poll_mockup: non-JSON response from job endpoint\n")
+            return 1
+
+        last_payload = payload
+        # Persist on every poll so the agent can inspect partial state if
+        # something goes wrong mid-loop.
+        try:
+            with open(args.out, "w") as fh:
+                json.dump(payload, fh, indent=2)
+        except OSError as e:
+            sys.stderr.write(f"ah_poll_mockup: could not write --out {args.out}: {e}\n")
+            return 1
+
+        status = payload.get("status") or "unknown"
+        ready, total = count_ready_previews(payload)
+        last_status = status
+
+        line = f"poll {poll_n} ({elapsed}s): status={status}"
+        if total or ready:
+            line += f", previews_ready={ready}/{total}"
+        print(line, flush=True)
+
+        if status == "failed":
+            sys.stderr.write("ah_poll_mockup: provider reports job failed\n")
+            return 1
+
+        if status == "completed" and ready >= args.min_ready:
+            print(
+                f"ah_poll_mockup: done in {elapsed}s — "
+                f"{ready}/{total} previews ready, response saved to {args.out}",
+                flush=True,
+            )
+            return 0
+
+        if elapsed >= args.timeout:
+            sys.stderr.write(
+                f"ah_poll_mockup: timeout after {args.timeout}s "
+                f"(last status={last_status}, response saved to {args.out})\n"
+            )
+            return 1
+
+        time.sleep(args.interval)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

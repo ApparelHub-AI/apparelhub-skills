@@ -117,16 +117,24 @@ For lumbar (20×12) or 22×22, swap the variant ID AND the area dimensions to ma
 
 ## Phase 3.5 — Poll + verify
 
-```bash
-# Substitute literal job UUID. Poll every 5s until status: completed.
-ah_curl GET /agents/v1/merchandise/product/preview/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/job/<job_uuid>
+One call handles BOTH completion phases (provider render + S3 ingestion):
 
-# Then poll for S3 ingestion (separate phase — see references/product-creation-pipeline.md Phase 3.5).
-# Poll every 8s until at least one row has preview_url != null.
-ah_curl GET /agents/v1/merchandise/product/preview-job/<job_uuid>/previews
+```bash
+ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
 ```
 
-Pick a mockup URL from the response. **Visually verify:**
+Writes the final response to `/tmp/preview_job.json`. Then extract a mockup URL for visual inspection:
+
+```bash
+ah_pick_provider_url /tmp/preview_job.json white front
+# Pillows are typically classified as "white" in the provider slug regardless
+# of the design color — the "color" refers to the unprinted pillow fabric.
+# If that returns no match, run ah_classify_previews to see the actual slug.
+
+curl -sS -o /tmp/mockup_check.png "https://.../<paste-url-from-above>"
+```
+
+Open `/tmp/mockup_check.png` and verify:
 - Background reaches all four edges (no white margins on the mockup)
 - Floral motifs aren't cut off at the pillow seams
 - Front and back both look intentional

@@ -9,3 +9,8 @@ Thumbs.db
 # Local working files
 .local/
 scratch/
+
+# Python bytecode cache (the scripts/ helpers are Python but distributed as
+# source — never commit __pycache__/)
+__pycache__/
+*.pyc
