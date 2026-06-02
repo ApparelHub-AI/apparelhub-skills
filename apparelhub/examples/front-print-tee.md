@@ -101,9 +101,14 @@ Calculate correct `(width, height, left, top)` from the Phase 2 cropped design's
 ah_pick_dimensions /tmp/design_transparent.png 728 376 --style chest_fill --out /tmp/dimensions.json
 ```
 
-The script prints JSON with the computed numbers. For a typical 664×527 cropped saguaro design on the 728×376 print area, you'll get something like `width=473, height=376, left=127, top=0` — height-constrained so the design fits entirely without crop, anchored at the top of the chest area.
+The script prints JSON with the computed numbers. For a typical 664×527 cropped saguaro design on the 728×376 print area, you'll get something like `width=427, height=339, left=150, top=37` — height-constrained so the design fits entirely without crop, with a 10% collar padding (~37px / ~0.6") of breathing room between the collar seam and the design.
 
-**Do NOT hand-pick these numbers.** The skill's old "80-90% of area_width" guidance produced too-small prints for square-ish designs and design-overshoot for tall designs. `ah_pick_dimensions` codifies the math.
+**Do NOT hand-pick these numbers.** The skill's old "80-90% of area_width" guidance produced too-small prints for square-ish designs, design-overshoot for tall designs, AND `top=0` chest prints that touched the collar. `ah_pick_dimensions` codifies the math AND the breathing-room defaults.
+
+If the merchant wants a TIGHTER or LOOSER look, pass `--collar-padding-pct`:
+- `0.05` — design closer to the collar (~0.3" breathing room), more substantial chest-fill
+- `0.10` (default) — balanced
+- `0.15` — design pushed lower (~0.9" breathing room), smaller but well-anchored
 
 Create the preview with ALL 15 variant IDs in one call. Substitute the LITERAL values from `/tmp/dimensions.json` AND the literal transparent-image UUID + URL from Phase 2:
 
@@ -118,10 +123,10 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
       "image_url": "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/.../xyz-789-trans.png",
       "area_width": 728,
       "area_height": 376,
-      "width": 473,
-      "height": 376,
-      "top": 0,
-      "left": 127
+      "width": 427,
+      "height": 339,
+      "top": 37,
+      "left": 150
     }
   ],
   "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
@@ -201,10 +206,10 @@ ah_curl POST /agents/v1/product/create -d '{
       "image_url": "https://.../xyz-789-trans.png",
       "area_width": 728,
       "area_height": 376,
-      "width": 473,
-      "height": 376,
-      "top": 0,
-      "left": 127
+      "width": 427,
+      "height": 339,
+      "top": 37,
+      "left": 150
     }
   ]
 }'

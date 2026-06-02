@@ -176,11 +176,11 @@ The script prints JSON to stdout AND writes to `--out`:
   "design_size": [664, 527],
   "area_size": [728, 376],
   "style": "chest_fill",
-  "width": 473,
-  "height": 376,
-  "left": 127,
-  "top": 0,
-  "rationale": "design aspect (1.26) is taller than area aspect (1.94), so scaled to fit area_height = 376px; resulting width 473px = 65% of area_width, anchored at top of print area.",
+  "width": 427,
+  "height": 339,
+  "left": 150,
+  "top": 37,
+  "rationale": "design aspect (1.26) is taller than the available height (area_h=376 minus collar_padding=37), so scaled to fit available_height = 339px; resulting width 427px = 59% of area_width, top=37px (10% of area_height for collar breathing room).",
   "strategy": "height_constrained"
 }
 ```
@@ -193,15 +193,25 @@ The skill used to say "use 80-90% of area_width." That guidance:
 1. **Doesn't respect the design's aspect ratio.** A 664×527 design (1.26:1) and a 1024×1024 design (1:1) need different sizing on the same 728×376 (1.94:1) print area, because the design's height overshoots the area's height differently.
 2. **Misses that height-overshoot causes Printful to CROP.** v1.7-and-earlier guidance was "OK if height overshoots since it's anchored at top" — that's wrong. Anything outside the print area gets cropped at print time.
 3. **Was soft.** Agents routinely picked 60-70% of area_width thinking "that looks fine," producing prints that look like small chest emblems instead of the chest-fill the merchant wanted.
+4. **Didn't account for the collar.** v1.8's `chest_fill` set `top=0` (literal top of print area), which on BC 3001 puts the design touching the collar seam. v1.9 reserves 10% of area_height as breathing room by default.
 
-`ah_pick_dimensions` codifies the math AND the constraint (never overshoot area_height by default) so the agent can't undershoot on chest-fill.
+`ah_pick_dimensions` codifies the math AND the constraints (never overshoot area_height, always leave collar breathing room for chest_fill) so the agent can't undershoot on chest-fill OR crowd the collar.
 
 ### Style presets
 
-- `chest_fill` (default) — 88% of area_width, scaled to preserve aspect ratio. If that would overshoot area_height, scale DOWN so the design fits entirely. Anchored at top of area.
+- `chest_fill` (default) — 88% of area_width, scaled to preserve aspect ratio. Reserves 10% of area_height at the top as breathing room between the collar seam and the design (tunable with `--collar-padding-pct`). Scales the design DOWN if needed so it fits entirely within the available height (area_h minus collar padding) without crop.
 - `chest_emblem` — 35% of area_width, centered both axes. For small badge / logo prints.
-- `back_center` — same sizing math as chest_fill but vertically centered (better for back placements).
+- `back_center` — same sizing math as chest_fill but vertically centered. NO collar padding (back placements don't have a collar problem; centering already gives even top/bottom breathing room).
 - `all_over` — width=area_width, height=area_height, top=0, left=0. For pillows, doormats, full-bleed designs. See `references/all-over-print.md`.
+
+### Tuning the collar padding
+
+Default 10% of area_height = ~0.6" breathing room on BC 3001 front. Adjust with `--collar-padding-pct`:
+
+- `0.05` — tight (~0.3"), design is more substantial but very close to the collar
+- `0.10` (default) — balanced, typical chest-print breathing room
+- `0.15` — generous (~0.9"), design is smaller but visually anchored well below the collar
+- `0.0` — flush with the print area top edge (v1.8 behavior — designs end up touching the collar, NOT recommended)
 
 For embroidery: tight placement on the chest-left or similar. Use `--style chest_emblem` and a smaller `--fill-ratio` if needed. See `references/embroidery.md` for the 541×541 anorak example.
 
@@ -220,10 +230,10 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
       "image_url": "<image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 473,
-      "height": 376,
-      "top": 0,
-      "left": 127
+      "width": 427,
+      "height": 339,
+      "top": 37,
+      "left": 150
     }
   ],
   "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
@@ -357,10 +367,10 @@ ah_curl POST /agents/v1/product/create -d '{
       "image_url": "<original_image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 473,
-      "height": 376,
-      "top": 0,
-      "left": 127
+      "width": 427,
+      "height": 339,
+      "top": 37,
+      "left": 150
     }
   ]
 }'

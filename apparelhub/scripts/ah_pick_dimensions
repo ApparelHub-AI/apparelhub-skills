@@ -64,6 +64,7 @@ def compute(
     area_h: int,
     style: str,
     fill_ratio: float,
+    collar_padding_pct: float = 0.10,
 ) -> dict:
     """Return {"width", "height", "left", "top", "rationale", "strategy"}."""
     if design_w <= 0 or design_h <= 0:
@@ -116,15 +117,25 @@ def compute(
     if style not in ("chest_fill", "back_center"):
         raise ValueError(f"unknown style {style!r}; expected one of {VALID_STYLES}")
 
+    # Collar padding: reserve a percentage of area_height as breathing room
+    # between the top of the print area and the top of the design.
+    # Applied to chest_fill only — back_center is already vertically centered
+    # which gives natural top/bottom padding.
+    collar_padding = int(area_h * collar_padding_pct) if style == "chest_fill" else 0
+    if collar_padding < 0:
+        collar_padding = 0
+    available_h = area_h - collar_padding
+
     target_width = int(area_w * fill_ratio)
     target_height = int(target_width / design_aspect)
     constrained = False
-    if target_height > area_h:
-        # Scale down so the design fits ENTIRELY within the print area without
-        # cropping. The skill used to advise "OK if it overshoots area_height
-        # since it's anchored at top" — that was wrong. Printful crops anything
-        # outside the print area.
-        target_height = area_h
+    if target_height > available_h:
+        # Scale down so the design fits ENTIRELY within the available print
+        # area (area_h minus collar padding) without cropping. The skill used
+        # to advise "OK if it overshoots area_height since it's anchored at
+        # top" — that was wrong. Printful crops anything outside the print
+        # area.
+        target_height = available_h
         target_width = int(target_height * design_aspect)
         constrained = True
 
@@ -132,16 +143,18 @@ def compute(
     if style == "back_center":
         top = int((area_h - target_height) / 2)
     else:
-        # chest_fill: anchor at top of print area (closer to collar)
-        top = 0
+        # chest_fill: anchor at top of print area + collar padding for
+        # breathing room between collar seam and design.
+        top = collar_padding
 
     actual_width_pct = 100 * target_width / area_w
     rationale_bits = []
     if constrained:
         rationale_bits.append(
-            f"design aspect ({design_aspect:.2f}) is taller than area aspect "
-            f"({area_w/area_h:.2f}), so scaled to fit area_height = {target_height}px; "
-            f"resulting width {target_width}px = {actual_width_pct:.0f}% of area_width"
+            f"design aspect ({design_aspect:.2f}) is taller than the available "
+            f"height (area_h={area_h} minus collar_padding={collar_padding}), so "
+            f"scaled to fit available_height = {target_height}px; resulting width "
+            f"{target_width}px = {actual_width_pct:.0f}% of area_width"
         )
     else:
         rationale_bits.append(
@@ -149,9 +162,12 @@ def compute(
             f"scaled to {target_height}px height preserving aspect ratio "
             f"({design_aspect:.2f})"
         )
-    rationale_bits.append(
-        "anchored at top of print area" if style == "chest_fill" else "vertically centered for back placement"
-    )
+    if style == "chest_fill":
+        rationale_bits.append(
+            f"top={top}px ({int(collar_padding_pct*100)}% of area_height for collar breathing room)"
+        )
+    else:
+        rationale_bits.append("vertically centered for back placement")
     return {
         "width": target_width,
         "height": target_height,
@@ -171,6 +187,12 @@ def main() -> int:
     ap.add_argument("--fill-ratio", type=float, default=0.88,
                     help="fraction of area_width to fill (chest_fill / back_center only). "
                          "Default 0.88. 0.85 = comfortable, 0.92 = very full chest.")
+    ap.add_argument("--collar-padding-pct", type=float, default=0.10,
+                    help="fraction of area_height reserved as breathing room between the "
+                         "collar seam and the top of the design (chest_fill only). "
+                         "Default 0.10 (~0.6\" on BC 3001 front). 0.0 = flush with print "
+                         "area top edge (v1.8 behavior — designs ended up touching the "
+                         "collar). 0.15 = generous space. Cap practically at 0.30.")
     ap.add_argument("--out", default=None,
                     help="write the dimensions JSON to this path in addition to stdout")
     args = ap.parse_args()
@@ -189,10 +211,14 @@ def main() -> int:
         sys.stderr.write("ah_pick_dimensions: --fill-ratio must be in (0, 1.0]\n")
         return 2
 
+    if args.collar_padding_pct < 0 or args.collar_padding_pct >= 1.0:
+        sys.stderr.write("ah_pick_dimensions: --collar-padding-pct must be in [0, 1.0)\n")
+        return 2
+
     try:
         result = compute(
             design_w, design_h, args.area_width, args.area_height,
-            args.style, args.fill_ratio,
+            args.style, args.fill_ratio, args.collar_padding_pct,
         )
     except ValueError as e:
         sys.stderr.write(f"ah_pick_dimensions: {e}\n")
