@@ -1,0 +1,224 @@
+#!/usr/bin/env python3
+"""
+ah_pick_dimensions — calculate correct (width, height, left, top) for the
+Phase 3 preview API call, given a design's actual aspect ratio + the
+garment's print area dimensions + a placement style.
+
+Why this exists: the agent kept picking dimensions that produced too-small
+or too-low prints. The skill's previous guidance "use 80-90% of area_width"
+was soft and missed two key facts:
+  1. The design after auto-crop has its OWN aspect ratio — using `width:
+     600, height: 600` for a 664×527 design overshoots height by 27%,
+     getting cropped at print time.
+  2. Print areas like BC 3001 front (728×376) are wide-and-short. A
+     chest-fill design must respect BOTH width AND height of the area
+     simultaneously, OR accept that one will be cropped.
+
+This script does the math, returns JSON, and prints a one-line rationale
+the agent can paraphrase to the merchant.
+
+Usage:
+    ah_pick_dimensions <design_path> <area_width> <area_height>
+                       [--style chest_fill|chest_emblem|back_center|all_over]
+                       [--fill-ratio 0.88]
+                       [--out /tmp/dimensions.json]
+
+Style presets:
+    chest_fill (default) — 88% of area_width, scaled to preserve design
+        aspect ratio. If that overflows area_height, scale DOWN and
+        re-center horizontally. Anchored at top of area (top=0).
+    chest_emblem — 35% of area_width, centered both horizontally and
+        vertically. For small badge / logo prints.
+    back_center — same as chest_fill but vertically centered within the
+        area (better for back placements where the print is mid-back).
+    all_over — width=area_width, height=area_height, top=0, left=0.
+        For pillows, doormats, full-bleed designs. IGNORES the design's
+        aspect ratio (relies on the design being generated AT the right
+        aspect for the area).
+
+Exit codes:
+    0 — wrote dimensions (printed to stdout AND optionally to --out)
+    1 — could not open the design, area dimensions invalid, or bad style
+    2 — bad CLI args
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import sys
+
+try:
+    from PIL import Image
+except ImportError:
+    sys.stderr.write("ah_pick_dimensions: Pillow required (pip install pillow)\n")
+    sys.exit(1)
+
+VALID_STYLES = ("chest_fill", "chest_emblem", "back_center", "all_over")
+
+
+def compute(
+    design_w: int,
+    design_h: int,
+    area_w: int,
+    area_h: int,
+    style: str,
+    fill_ratio: float,
+) -> dict:
+    """Return {"width", "height", "left", "top", "rationale", "strategy"}."""
+    if design_w <= 0 or design_h <= 0:
+        raise ValueError("design dimensions must be positive")
+    if area_w <= 0 or area_h <= 0:
+        raise ValueError("area dimensions must be positive")
+    design_aspect = design_w / design_h
+
+    if style == "all_over":
+        return {
+            "width": area_w,
+            "height": area_h,
+            "left": 0,
+            "top": 0,
+            "rationale": (
+                f"All-over print — fills the entire {area_w}x{area_h} print area. "
+                f"Design aspect ratio ({design_aspect:.2f}) is ignored; design should "
+                f"be generated at the area's aspect ratio ({area_w/area_h:.2f}) for "
+                f"best results."
+            ),
+            "strategy": "fill_ignore_aspect",
+        }
+
+    if style == "chest_emblem":
+        target_width = int(area_w * 0.35)
+        target_height = int(target_width / design_aspect)
+        # Don't exceed area_height (with some headroom for visual breathing room)
+        max_h = int(area_h * 0.85)
+        if target_height > max_h:
+            target_height = max_h
+            target_width = int(target_height * design_aspect)
+        left = int((area_w - target_width) / 2)
+        top = int((area_h - target_height) / 2)
+        return {
+            "width": target_width,
+            "height": target_height,
+            "left": left,
+            "top": top,
+            "rationale": (
+                f"Chest emblem — 35% of area_width = {target_width}px wide, "
+                f"scaled to {target_height}px height to preserve aspect ratio "
+                f"({design_aspect:.2f}), centered both axes within "
+                f"{area_w}x{area_h} print area."
+            ),
+            "strategy": "emblem_centered",
+        }
+
+    # chest_fill and back_center share the core sizing math; they differ only
+    # in vertical anchoring.
+    if style not in ("chest_fill", "back_center"):
+        raise ValueError(f"unknown style {style!r}; expected one of {VALID_STYLES}")
+
+    target_width = int(area_w * fill_ratio)
+    target_height = int(target_width / design_aspect)
+    constrained = False
+    if target_height > area_h:
+        # Scale down so the design fits ENTIRELY within the print area without
+        # cropping. The skill used to advise "OK if it overshoots area_height
+        # since it's anchored at top" — that was wrong. Printful crops anything
+        # outside the print area.
+        target_height = area_h
+        target_width = int(target_height * design_aspect)
+        constrained = True
+
+    left = int((area_w - target_width) / 2)
+    if style == "back_center":
+        top = int((area_h - target_height) / 2)
+    else:
+        # chest_fill: anchor at top of print area (closer to collar)
+        top = 0
+
+    actual_width_pct = 100 * target_width / area_w
+    rationale_bits = []
+    if constrained:
+        rationale_bits.append(
+            f"design aspect ({design_aspect:.2f}) is taller than area aspect "
+            f"({area_w/area_h:.2f}), so scaled to fit area_height = {target_height}px; "
+            f"resulting width {target_width}px = {actual_width_pct:.0f}% of area_width"
+        )
+    else:
+        rationale_bits.append(
+            f"{int(fill_ratio*100)}% of area_width = {target_width}px wide, "
+            f"scaled to {target_height}px height preserving aspect ratio "
+            f"({design_aspect:.2f})"
+        )
+    rationale_bits.append(
+        "anchored at top of print area" if style == "chest_fill" else "vertically centered for back placement"
+    )
+    return {
+        "width": target_width,
+        "height": target_height,
+        "left": left,
+        "top": top,
+        "rationale": ", ".join(rationale_bits) + ".",
+        "strategy": "height_constrained" if constrained else "width_constrained",
+    }
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="ah_pick_dimensions", description=__doc__)
+    ap.add_argument("design_path")
+    ap.add_argument("area_width", type=int)
+    ap.add_argument("area_height", type=int)
+    ap.add_argument("--style", choices=VALID_STYLES, default="chest_fill")
+    ap.add_argument("--fill-ratio", type=float, default=0.88,
+                    help="fraction of area_width to fill (chest_fill / back_center only). "
+                         "Default 0.88. 0.85 = comfortable, 0.92 = very full chest.")
+    ap.add_argument("--out", default=None,
+                    help="write the dimensions JSON to this path in addition to stdout")
+    args = ap.parse_args()
+
+    try:
+        img = Image.open(args.design_path)
+        design_w, design_h = img.size
+    except FileNotFoundError:
+        sys.stderr.write(f"ah_pick_dimensions: file not found: {args.design_path}\n")
+        return 1
+    except Exception as e:
+        sys.stderr.write(f"ah_pick_dimensions: cannot open {args.design_path}: {e}\n")
+        return 1
+
+    if args.fill_ratio <= 0 or args.fill_ratio > 1.0:
+        sys.stderr.write("ah_pick_dimensions: --fill-ratio must be in (0, 1.0]\n")
+        return 2
+
+    try:
+        result = compute(
+            design_w, design_h, args.area_width, args.area_height,
+            args.style, args.fill_ratio,
+        )
+    except ValueError as e:
+        sys.stderr.write(f"ah_pick_dimensions: {e}\n")
+        return 1
+
+    output = {
+        "design_path": args.design_path,
+        "design_size": [design_w, design_h],
+        "area_size": [args.area_width, args.area_height],
+        "style": args.style,
+        **result,
+    }
+
+    # Stdout: pretty-printed JSON the agent reads to extract literal numbers.
+    print(json.dumps(output, indent=2))
+
+    if args.out:
+        try:
+            with open(args.out, "w") as fh:
+                json.dump(output, fh, indent=2)
+        except OSError as e:
+            sys.stderr.write(f"ah_pick_dimensions: could not write --out {args.out}: {e}\n")
+            return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

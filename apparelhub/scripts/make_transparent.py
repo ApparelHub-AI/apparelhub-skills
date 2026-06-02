@@ -10,22 +10,41 @@ arbitrary `python3` execution. It is pure-stdlib + Pillow (no numpy).
 
 What it does, in order:
   1. Detect the chroma color (median of the 4 corners) unless --chroma is given.
-  2. Flood-fill from the image border to clear the connected exterior background.
-  3. Sweep the whole image for any remaining chroma pixels — this is what makes
+  2. SANITY-CHECK that the detected chroma is close to pure green (#00FF00).
+     If the AI ignored the bright-green prompt and produced a yellow-green or
+     muted background, design colors that overlap with the background (yellow
+     suns, gold details, lime mountains) will be eaten by the keying. Default
+     behavior: exit 4 with a recommendation to regenerate. Bypass with
+     --force-chroma to attempt anyway.
+  3. Flood-fill from the image border to clear the connected exterior background.
+  4. Sweep the whole image for any remaining chroma pixels — this is what makes
      enclosed regions transparent (the holes in B/e/d/o/a, gaps between letters,
      spaces between rays). On by default; disable with --keep-enclosed.
-  4. Optionally despill: neutralize residual green fringe on anti-aliased edges.
-  5. Write cleared pixels as pre-multiplied white (255,255,255,0) so Printful's
+  5. Optionally despill: neutralize residual green fringe on anti-aliased edges.
+  6. Write cleared pixels as pre-multiplied white (255,255,255,0) so Printful's
      flatten-against-white does NOT leave dark halos.
-  6. Optionally write a dark-background preview JPG to eyeball it on a "shirt".
+  7. CROP to the design's tight bounding box (+ small padding) so the resulting
+     canvas matches the actual design extent. This prevents Phase 3 from sizing
+     the design against 50%+ transparent padding. Disable with --no-crop.
+  8. Optionally write a dark-background preview JPG to eyeball it on a "shirt".
 
 Usage:
   python3 make_transparent.py IN.png OUT.png
-  python3 make_transparent.py IN.png OUT.png --chroma 00FF00 --tolerance 90
+  python3 make_transparent.py IN.png OUT.png --chroma 00FF00 --tolerance 50
   python3 make_transparent.py IN.png OUT.png --dominance          # muted/dark green bg
   python3 make_transparent.py IN.png OUT.png --despill --preview OUT_preview.jpg
+  python3 make_transparent.py IN.png OUT.png --no-crop            # legacy behavior
 
-Exit codes: 0 = ok, 2 = bad args / file, 3 = result looks wrong (corners not clear).
+Exit codes:
+  0 = ok
+  2 = bad args / file
+  3 = result looks wrong (corners not clear)
+  4 = chroma sanity check failed (AI background isn't close to pure green;
+      regenerate or pass --force-chroma)
+
+Defaults changed in v1.8: --tolerance 90 → 45, --crop is now ON by default
+(was a no-op before). To restore v1.7-and-earlier behavior pass
+--tolerance 90 --no-crop --force-chroma.
 """
 import argparse
 import sys
@@ -58,6 +77,31 @@ def detect_chroma(px, w, h):
     chan = lambda i: sorted(c[i] for c in corners)
     med = lambda v: (v[1] + v[2]) // 2  # mean of the two middle values
     return tuple(med(chan(i)) for i in range(3))
+
+
+def chroma_distance_from_pure_green(rgb):
+    """Euclidean distance from #00FF00. Pure green = 0. Yellow-green ~190.
+    Used to detect when the AI ignored the bright-green prompt and produced
+    a background that will overlap with warm design colors during keying."""
+    r, g, b = rgb
+    return ((r - 0) ** 2 + (g - 255) ** 2 + (b - 0) ** 2) ** 0.5
+
+
+def crop_to_bbox(img, padding=16):
+    """Crop the image to the bounding box of non-transparent pixels, plus
+    a small transparent padding so the corner-alpha-zero sanity check still
+    works downstream. Returns (cropped_img, (x0, y0, x1, y1)) or (img, None)
+    if the image is fully transparent."""
+    bbox = img.getbbox()
+    if bbox is None:
+        return img, None
+    x0, y0, x1, y1 = bbox
+    w, h = img.size
+    px0 = max(0, x0 - padding)
+    py0 = max(0, y0 - padding)
+    px1 = min(w, x1 + padding)
+    py1 = min(h, y1 + padding)
+    return img.crop((px0, py0, px1, py1)), (px0, py0, px1, py1)
 
 
 def make_matcher(target, tolerance, dominance):
@@ -137,14 +181,25 @@ def main():
     ap.add_argument("output")
     ap.add_argument("--chroma", type=parse_hex, default=None,
                     help="background hex (e.g. 00FF00). Default: auto-detect from corners.")
-    ap.add_argument("--tolerance", type=int, default=90,
-                    help="per-channel match tolerance for the distance test (default 90).")
+    ap.add_argument("--tolerance", type=int, default=45,
+                    help="per-channel match tolerance for the distance test (default 45). "
+                         "v1.7 used 90 which routinely ate yellow / gold design elements when the "
+                         "AI ignored the bright-green prompt.")
     ap.add_argument("--dominance", action="store_true",
                     help="use green-dominance test instead of a color box (for muted/dark green screens).")
     ap.add_argument("--keep-enclosed", action="store_true",
                     help="only flood from the border; do NOT clear enclosed chroma (rarely wanted).")
     ap.add_argument("--despill", action="store_true",
                     help="neutralize residual green fringe on anti-aliased edges.")
+    ap.add_argument("--no-crop", action="store_true",
+                    help="skip the post-key tight-crop. Off by default (v1.7 and earlier behavior).")
+    ap.add_argument("--crop-padding", type=int, default=16,
+                    help="pixels of transparent padding kept around the bounding box (default 16).")
+    ap.add_argument("--force-chroma", action="store_true",
+                    help="bypass the chroma sanity check that rejects non-green AI backgrounds.")
+    ap.add_argument("--chroma-max-distance", type=float, default=120.0,
+                    help="reject if the detected chroma is more than this far (euclidean RGB) from "
+                         "#00FF00. Default 120. Pass --force-chroma to override.")
     ap.add_argument("--preview", metavar="PATH", default=None,
                     help="also write a composite-over-dark JPG to sanity-check on a dark shirt.")
     ap.add_argument("--preview-bg", type=parse_rgb, default=(18, 18, 18),
@@ -160,26 +215,73 @@ def main():
     w, h = img.size
     px = img.load()
     target = args.chroma or detect_chroma(px, w, h)
+
+    # Chroma sanity check — refuse to key against a background that's clearly
+    # NOT pure green, because tolerance-based color matching will eat warm
+    # design elements (yellow suns, gold details). Skip when the user has
+    # provided --chroma explicitly (they know what they're doing) or when
+    # --dominance is used (dominance-mode handles muted greens fine).
+    chroma_distance = chroma_distance_from_pure_green(target)
+    if args.chroma is None and not args.dominance and not args.force_chroma:
+        if chroma_distance > args.chroma_max_distance:
+            sys.stderr.write(
+                f"chroma SANITY CHECK FAILED\n"
+                f"  detected corners: #{target[0]:02X}{target[1]:02X}{target[2]:02X} "
+                f"(distance {chroma_distance:.0f} from #00FF00)\n"
+                f"  threshold: --chroma-max-distance {args.chroma_max_distance:.0f}\n"
+                f"\n"
+                f"  The AI generator ignored your 'solid bright green #00FF00' prompt and\n"
+                f"  used a different background color. Keying against this color with the\n"
+                f"  default tolerance will likely consume warm design elements (yellow\n"
+                f"  suns, gold details, lime mountains) that fall inside the match window.\n"
+                f"\n"
+                f"  Fix: regenerate the design with a stricter prompt — try adding\n"
+                f"    'pure RGB #00FF00 background, fully saturated bright green, NOT\n"
+                f"     yellow-green or olive'\n"
+                f"\n"
+                f"  Or, if you've inspected the design and the palette is safe,\n"
+                f"  re-run with --force-chroma to bypass this check.\n"
+            )
+            sys.exit(4)
+
     is_bg = make_matcher(target, args.tolerance, args.dominance)
 
     cleared = flood_from_border(px, w, h, is_bg)
     swept = 0 if args.keep_enclosed else sweep_enclosed(px, w, h, is_bg)
     fringe = despill(px, w, h) if args.despill else 0
 
+    # Tight-crop the result so downstream sizing reflects the actual design
+    # extent, not the AI canvas + transparent margin. Skipped with --no-crop.
+    crop_info = None
+    if not args.no_crop:
+        cropped, crop_info = crop_to_bbox(img, padding=args.crop_padding)
+        if crop_info is not None:
+            img = cropped
+            w, h = img.size
+            px = img.load()  # re-bind for the post-crop corner sample below
+
     img.save(args.output, "PNG")
 
-    total = w * h
-    transparent = cleared + swept
-    pct = 100.0 * transparent / total
+    total_orig = (img.size[0] * img.size[1])  # post-crop dimensions for "transparent" ratio
+    # Recompute corners on the (possibly cropped) image
     corners = [px[0, 0][3], px[w - 1, 0][3], px[0, h - 1][3], px[w - 1, h - 1][3]]
-    print(f"input        {args.input} ({w}x{h})")
+    transparent = cleared + swept
+    pct = 100.0 * transparent / (1 if total_orig == 0 else total_orig)
+    print(f"input        {args.input} ({w if crop_info is None else 'pre-crop ' + str(args.input)} -> {w}x{h})")
     print(f"chroma       {'auto ' if args.chroma is None else ''}#{target[0]:02X}{target[1]:02X}{target[2]:02X}"
-          f"  mode={'dominance' if args.dominance else f'box±{args.tolerance}'}")
+          f"  mode={'dominance' if args.dominance else f'box±{args.tolerance}'}"
+          f"  distance_from_00FF00={chroma_distance:.0f}")
     print(f"flood        {cleared:,} px")
     print(f"sweep        {swept:,} px  ({'skipped' if args.keep_enclosed else 'enclosed regions'})")
     if args.despill:
         print(f"despill      {fringe:,} px")
-    print(f"transparent  {transparent:,} / {total:,} ({pct:.1f}%)")
+    if crop_info is not None:
+        x0, y0, x1, y1 = crop_info
+        print(f"crop         bbox=({x0},{y0})-({x1},{y1})  output {w}x{h} (padding={args.crop_padding})")
+    elif args.no_crop:
+        print(f"crop         skipped (--no-crop)")
+    print(f"transparent  {transparent:,} cleared "
+          f"({'mostly outside the crop' if crop_info else f'{pct:.1f}% of canvas'})")
     print(f"corner alpha {corners}  (want all 0)")
     print(f"output       {args.output}")
 

@@ -22,7 +22,7 @@ export APPARELHUB_API_KEY=ah_...   # one-time, in the shell you'll be working in
 
 ```bash
 ah_curl POST /agents/v1/images/generate -d '{
-  "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, warm orange and red palette, on solid bright green background #00FF00",
+  "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, warm orange and red palette, on pure RGB #00FF00 background, fully saturated bright green, NOT yellow-green or olive, NOT chartreuse",
   "source": "Nano Banana",
   "size": "1024x1024"
 }'
@@ -35,7 +35,10 @@ Response shape:
 
 Capture the `uuid` and `url` in your reasoning context. From now on you'll substitute those LITERAL values into subsequent calls.
 
-**Verify visually.** Download and view the image. Check that the cactus illustration looks good AND the background is solid green (not white, not checkerboard, not partially transparent). If the design has any text, vision-check the spelling.
+**Verify visually.** Download and view the image. Check that:
+1. The cactus illustration looks good
+2. The background is solid **bright** green — close to pure `#00FF00`, NOT yellow-green / olive / chartreuse. If the AI produced a wrong color, `make_transparent.py` in Phase 2 will reject the keying with a sanity-check failure. Better to regenerate now than wait for that.
+3. If the design has any text, vision-check the spelling.
 
 ---
 
@@ -53,9 +56,13 @@ python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \
     --preview /tmp/design_preview.jpg
 ```
 
-The script auto-detects the corner chroma color, flood-fills + sweeps enclosed regions, and writes pre-multiplied white. It prints `corner alpha [0, 0, 0, 0] (want all 0)` plus a transparency % when it succeeds. If it exits non-zero, re-run with `--dominance --despill`.
+The script auto-detects the corner chroma color, runs a sanity check that it's close to pure `#00FF00`, flood-fills + sweeps enclosed regions, writes pre-multiplied white, and **auto-crops to the design's tight bounding box** (so Phase 3 sizing reflects the actual design extent, not the AI canvas + transparent margin).
 
-**Inspect `/tmp/design_preview.jpg`** before continuing — that's the no-halo, no-leftover-green gate.
+**Exit code 4 — chroma sanity check failed.** The AI used a yellow-green / olive / muted background. Regenerate the design with the stricter prompt from Phase 1 (do NOT just pass `--force-chroma` — that risks eating warm design colors like the yellow sun in a sunset illustration).
+
+**Exit code 3 — corners not fully transparent.** Some background pixels survived. Re-run with `--dominance --despill`.
+
+**Exit code 0 — success.** The script prints the post-crop dimensions and `corner alpha [0, 0, 0, 0] (want all 0)`. **Inspect `/tmp/design_preview.jpg`** before continuing — that's the no-halo, no-leftover-green gate.
 
 Upload the processed PNG to ApparelHub:
 
@@ -88,7 +95,17 @@ ah_curl GET /agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/
 # Expect: area_width=728, area_height=376
 ```
 
-Create the preview with ALL 15 variant IDs in one call. Substitute the literal new transparent-image UUID + URL from Phase 2:
+Calculate correct `(width, height, left, top)` from the Phase 2 cropped design's aspect ratio + the print area:
+
+```bash
+ah_pick_dimensions /tmp/design_transparent.png 728 376 --style chest_fill --out /tmp/dimensions.json
+```
+
+The script prints JSON with the computed numbers. For a typical 664×527 cropped saguaro design on the 728×376 print area, you'll get something like `width=473, height=376, left=127, top=0` — height-constrained so the design fits entirely without crop, anchored at the top of the chest area.
+
+**Do NOT hand-pick these numbers.** The skill's old "80-90% of area_width" guidance produced too-small prints for square-ish designs and design-overshoot for tall designs. `ah_pick_dimensions` codifies the math.
+
+Create the preview with ALL 15 variant IDs in one call. Substitute the LITERAL values from `/tmp/dimensions.json` AND the literal transparent-image UUID + URL from Phase 2:
 
 ```bash
 ah_curl POST /agents/v1/merchandise/product/preview -d '{
@@ -101,15 +118,17 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
       "image_url": "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/.../xyz-789-trans.png",
       "area_width": 728,
       "area_height": 376,
-      "width": 600,
-      "height": 600,
+      "width": 473,
+      "height": 376,
       "top": 0,
-      "left": 64
+      "left": 127
     }
   ],
   "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
 }'
 ```
+
+**Your numbers will differ** depending on the design's aspect ratio after cropping. Always source them from `ah_pick_dimensions`, not from this example.
 
 Response includes `job_uuid`. Capture it.
 
@@ -182,14 +201,16 @@ ah_curl POST /agents/v1/product/create -d '{
       "image_url": "https://.../xyz-789-trans.png",
       "area_width": 728,
       "area_height": 376,
-      "width": 600,
-      "height": 600,
+      "width": 473,
+      "height": 376,
       "top": 0,
-      "left": 64
+      "left": 127
     }
   ]
 }'
 ```
+
+**Critical:** the `width`/`height`/`top`/`left` numbers MUST match what was sent to the Phase 3 preview call. Source them from `/tmp/dimensions.json` (the `ah_pick_dimensions` output) — don't hardcode them, and don't let the values drift between Phase 3 and Phase 4.
 
 **Field-name reminders** (FLIPPED from Phase 3 — see the table in `references/product-creation-pipeline.md`):
 - `provider_uuid` (NOT `merchandise_provider_uuid`)

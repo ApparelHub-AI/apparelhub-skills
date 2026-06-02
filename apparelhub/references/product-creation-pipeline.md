@@ -10,11 +10,13 @@ The 7-phase workflow from "user wants a saguaro tee" to "product is live on thei
 
 ```bash
 ah_curl POST /agents/v1/images/generate -d '{
-  "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, on solid bright green background #00FF00",
+  "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, on pure RGB #00FF00 background, fully saturated bright green, NOT yellow-green or olive, NOT chartreuse",
   "source": "Nano Banana",
   "size": "1024x1024"
 }'
 ```
+
+The extra phrasing on the background is deliberate. AI generators routinely ignore "#00FF00" and produce a yellow-green or olive background instead. When that happens, the keying step in Phase 2 will consume warm design elements (yellow suns, gold details) because they fall inside the tolerance window around the actual background color. The `make_transparent.py` script in Phase 2 has a sanity check that rejects non-#00FF00 backgrounds and tells the agent to regenerate — but it's cheaper to get the right background first.
 
 Returns `{ "generated_image": { "uuid": "...", "url": "..." } }`. Save the UUID.
 
@@ -55,7 +57,7 @@ Don't silently make this call.
 
 ### Step 2a: Local processing with the packaged script
 
-Use the bundled helper at `scripts/make_transparent.py` (relative to this skill's base directory). It does border flood-fill + an enclosed-region sweep (so letter holes go transparent), auto-detects the actual chroma color from the corners (AI green is rarely exactly `#00FF00`), writes pre-multiplied white to avoid halos, and can emit a dark-background preview. It is the single, reviewable entry point for this step — invoke it BY PATH so it stays inside the whitelist (see `settings.recommended.json`); do NOT paste an inline `python3 -c`/heredoc version, which would prompt on every run.
+Use the bundled helper at `scripts/make_transparent.py` (relative to this skill's base directory). It does border flood-fill + an enclosed-region sweep (so letter holes go transparent), auto-detects the actual chroma color from the corners (AI green is rarely exactly `#00FF00`), writes pre-multiplied white to avoid halos, **auto-crops to the design's tight bounding box** (so downstream sizing reflects the actual design extent, not the AI canvas + transparent margin), and can emit a dark-background preview. It is the single, reviewable entry point for this step — invoke it BY PATH so it stays inside the whitelist (see `settings.recommended.json`); do NOT paste an inline `python3 -c`/heredoc version, which would prompt on every run.
 
 ```bash
 # Download the generated image (it has a solid green background).
@@ -71,15 +73,36 @@ python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \
     --preview /tmp/design_preview.jpg
 ```
 
-It auto-detects the chroma and prints `corner alpha [0, 0, 0, 0] (want all 0)` plus a transparency %. Then **look at `/tmp/design_preview.jpg`** before continuing — that's your no-halo, no-leftover-green gate.
+The script prints the detected chroma + its euclidean distance from `#00FF00`, the keying stats, the post-crop dimensions, and a `corner alpha [0, 0, 0, 0]` confirmation. Then **look at `/tmp/design_preview.jpg`** before continuing — that's your no-halo, no-leftover-green gate.
 
-Useful flags:
-- `--dominance` — for muted / desaturated / dark green screens (e.g. corners come back like `#52C06E`, `#95D052`). Uses a "green dominates" test instead of a color box; reach for this if the default leaves green fringe or the corner-alpha warning fires.
+### What to do if the chroma sanity check fails (exit code 4)
+
+If the AI ignored the bright-green prompt and produced a yellow-green / olive / muted background, the script REFUSES to key (exit code 4) and prints a regeneration recommendation. Default behavior:
+
+```
+chroma SANITY CHECK FAILED
+  detected corners: #B5CD57 (distance 207 from #00FF00)
+  threshold: --chroma-max-distance 120
+```
+
+The right response is to **REGENERATE the design** with a stricter prompt (the failure message includes the suggested phrasing). Do NOT just pass `--force-chroma` — keying against a non-green background with default tolerance will consume any design colors that fall within ±45 of the background, which means yellows, golds, and warm earth tones get eaten.
+
+Pass `--force-chroma` only when:
+- You've inspected the design and confirmed it has no warm colors close to the background, OR
+- You've also passed `--dominance` (which uses a green-channel-dominates rule instead of a color box and is safer against muted greens), OR
+- You're explicitly testing the keying behavior
+
+### Useful flags
+
+- `--dominance` — for muted / desaturated / dark green screens (e.g. corners come back like `#52C06E`, `#95D052`). Uses a "green dominates" test instead of a color box; safer against non-pure-green backgrounds. Bypasses the chroma sanity check.
 - `--despill` — neutralize a faint green rim on anti-aliased edges.
-- `--chroma 00FF00` — force a specific background color instead of auto-detect.
-- `--tolerance N` — widen/narrow the color-box match (default 90).
+- `--chroma 00FF00` — force a specific background color instead of auto-detect. Bypasses the sanity check (you've already told the script what color to key).
+- `--tolerance N` — widen/narrow the color-box match (default 45, was 90 in v1.7). Wider tolerance catches more anti-aliased pixels but is more likely to consume design colors.
+- `--no-crop` — skip the auto-crop step. NOT recommended — without crop, the design has lots of transparent padding around it, which makes the agent's Phase 3 sizing inaccurate. Use only when you specifically need the original canvas dimensions preserved.
+- `--force-chroma` — bypass the non-#00FF00 sanity check.
+- `--crop-padding N` — transparent padding kept around the bounding box (default 16). Keeps the corner-alpha-zero check working downstream.
 
-The script exits non-zero and warns if the corners aren't fully transparent — if that happens, re-run with `--dominance` (and optionally `--despill`).
+The script also exits non-zero (exit 3) if the corners aren't fully transparent after keying — if that happens, re-run with `--dominance` (and optionally `--despill`).
 
 ### Step 2b: Upload the processed bytes via the transform endpoint
 
@@ -137,26 +160,54 @@ ah_curl GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>
 
 The response includes `print_templates` (or similar) with each placement's dimensions and `provider_ref_id` (e.g., `"front"`, `"back"`, `"embroidery_chest_left"`, `"default"`).
 
-### Step 3c: CALCULATE design positioning within the print area
+### Step 3c: CALCULATE design positioning with `ah_pick_dimensions`
 
-For a CHEST-FILLING front print (standard tee):
-- `width` = 80-90% of `area_width` (substantial, not a small chest emblem)
-- `height` = scale proportionally to maintain design aspect ratio
-- `left` = `(area_width - width) / 2` (center horizontally)
-- `top` = small positive (10-30) OR 0 to top-align within the print area
+Use the packaged `ah_pick_dimensions` script. It opens the Phase-2-cropped design, reads its actual aspect ratio, and computes `(width, height, left, top)` that respects BOTH the area width AND the area height — preventing the design from getting cropped at print time or from rendering as a small chest emblem when you wanted chest-fill.
 
-Example for Bella+Canvas 3001 front (typical `area_width: 728, area_height: 376`):
-- `width: 600` (82% of 728 — chest-filling)
-- `height: 600` (square design; OK if it overshoots area_height since it's anchored at top)
-- `left: 64` ((728 - 600) / 2)
-- `top: 0`
+```bash
+ah_pick_dimensions /tmp/design_transparent.png 728 376 --style chest_fill --out /tmp/dimensions.json
+```
 
-For a small CHEST EMBLEM (logo-style): `width = 200-280` is appropriate.
-For a center-back print: same math, use the back placement's area dimensions.
-For all-over print: `width = area_width`, `height = area_height`, `top = 0`, `left = 0`. See `references/all-over-print.md`.
-For embroidery: tight placement on the chest-left or similar. See `references/embroidery.md` for the 541×541 anorak example.
+The script prints JSON to stdout AND writes to `--out`:
+
+```json
+{
+  "design_path": "/tmp/design_transparent.png",
+  "design_size": [664, 527],
+  "area_size": [728, 376],
+  "style": "chest_fill",
+  "width": 473,
+  "height": 376,
+  "left": 127,
+  "top": 0,
+  "rationale": "design aspect (1.26) is taller than area aspect (1.94), so scaled to fit area_height = 376px; resulting width 473px = 65% of area_width, anchored at top of print area.",
+  "strategy": "height_constrained"
+}
+```
+
+Read the literal numbers from the output and paste them into the Phase 3 preview API body (and the Phase 4 product create body — they must match).
+
+### Why this beats picking dimensions by hand
+
+The skill used to say "use 80-90% of area_width." That guidance:
+1. **Doesn't respect the design's aspect ratio.** A 664×527 design (1.26:1) and a 1024×1024 design (1:1) need different sizing on the same 728×376 (1.94:1) print area, because the design's height overshoots the area's height differently.
+2. **Misses that height-overshoot causes Printful to CROP.** v1.7-and-earlier guidance was "OK if height overshoots since it's anchored at top" — that's wrong. Anything outside the print area gets cropped at print time.
+3. **Was soft.** Agents routinely picked 60-70% of area_width thinking "that looks fine," producing prints that look like small chest emblems instead of the chest-fill the merchant wanted.
+
+`ah_pick_dimensions` codifies the math AND the constraint (never overshoot area_height by default) so the agent can't undershoot on chest-fill.
+
+### Style presets
+
+- `chest_fill` (default) — 88% of area_width, scaled to preserve aspect ratio. If that would overshoot area_height, scale DOWN so the design fits entirely. Anchored at top of area.
+- `chest_emblem` — 35% of area_width, centered both axes. For small badge / logo prints.
+- `back_center` — same sizing math as chest_fill but vertically centered (better for back placements).
+- `all_over` — width=area_width, height=area_height, top=0, left=0. For pillows, doormats, full-bleed designs. See `references/all-over-print.md`.
+
+For embroidery: tight placement on the chest-left or similar. Use `--style chest_emblem` and a smaller `--fill-ratio` if needed. See `references/embroidery.md` for the 541×541 anorak example.
 
 ### Step 3d: Create the preview with the COMPLETE template structure
+
+Paste the LITERAL `width`, `height`, `top`, `left` numbers from `/tmp/dimensions.json` (Step 3c output). Example body using the values from the sample `ah_pick_dimensions` output above (664×527 design on 728×376 print area):
 
 ```bash
 ah_curl POST /agents/v1/merchandise/product/preview -d '{
@@ -169,19 +220,22 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
       "image_url": "<image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 600,
-      "height": 600,
+      "width": 473,
+      "height": 376,
       "top": 0,
-      "left": 64
+      "left": 127
     }
   ],
   "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
 }'
 ```
 
+(Your numbers will differ depending on the design's aspect ratio — always source them from `ah_pick_dimensions`.)
+
 Notes:
 - Include ALL variant_ids across ALL colors in ONE preview call (15 IDs for 3 colors × 5 sizes here). The provider returns separate mockups per color in the same job.
 - Missing any template field → 404 with `KeyError` or generic Exception from `merchandise.py`. Common cause of "Error building the standard response for product preview." Always pass the full template object.
+- The SAME `width`/`height`/`top`/`left` numbers must be used in the Phase 4 product create body's `print_data[0]`. Mismatched dimensions produce inconsistent state between the mockup and the actual print.
 
 Returns a `job_uuid`. Mockup generation is **async**. Use the packaged `ah_poll_mockup` script — DO NOT write an inline `for` loop with `$(...)` command substitution; the expansion check will prompt on every iteration.
 
@@ -303,14 +357,16 @@ ah_curl POST /agents/v1/product/create -d '{
       "image_url": "<original_image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 600,
-      "height": 600,
+      "width": 473,
+      "height": 376,
       "top": 0,
-      "left": 64
+      "left": 127
     }
   ]
 }'
 ```
+
+**The `width`/`height`/`top`/`left` values MUST match what was sent to the Phase 3 preview call.** Source them from `/tmp/dimensions.json` (output of `ah_pick_dimensions` in Step 3c). Mismatch produces a product whose mockup shows one placement but whose actual print uses a different placement.
 
 ### `print_data` vs `display_image` — what each is for
 

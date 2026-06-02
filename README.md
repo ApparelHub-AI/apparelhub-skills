@@ -19,8 +19,9 @@ apparelhub-skills/
     │   ├── ah_poll_mockup                    # Phase 3 wait — polls job + S3 ingestion in one call (no for-loop expansion)
     │   ├── ah_classify_previews              # Phase 4.0 — parses preview rows by color/angle, writes display+gallery picks
     │   ├── ah_pick_provider_url              # Extract one URL by color+angle from a preview JSON (no jq filter needed)
+    │   ├── ah_pick_dimensions                # Phase 3 sizing — compute (width,height,left,top) from design aspect + area
     │   ├── install_path.sh                   # One-time PATH setup (detects bash/zsh/fish, idempotent)
-    │   └── make_transparent.py               # Phase 2 keying tool (auto-chroma, enclosed sweep, despill)
+    │   └── make_transparent.py               # Phase 2 keying tool (auto-chroma, enclosed sweep, despill, auto-crop, chroma sanity check)
     ├── references/
     │   ├── product-creation-pipeline.md      # 7-phase workflow detail
     │   ├── design-rules.md                   # AI prompts, transparency, vision verify
@@ -95,6 +96,8 @@ By default Claude Code asks for confirmation before every `curl`, `python3`, and
       "Bash(*apparelhub/scripts/ah_classify_previews *)",
       "Bash(ah_pick_provider_url *)",
       "Bash(*apparelhub/scripts/ah_pick_provider_url *)",
+      "Bash(ah_pick_dimensions *)",
+      "Bash(*apparelhub/scripts/ah_pick_dimensions *)",
       "Bash(python3 *apparelhub/scripts/make_transparent.py *)",
       "Bash(python3 /tmp/*)",
       "Bash(getent hosts *)"
@@ -161,6 +164,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.8 | 2026-06-02 | Quality regressions surfaced in the second Test 2 cycle: the keying step destroyed the design (yellow sun consumed because the AI used a yellow-green background instead of pure #00FF00) AND the agent picked dimensions that produced too-small chest prints (68.7% of area_width vs the skill's 80-90% guidance). Three fixes: (1) `make_transparent.py` adds a chroma sanity check that REJECTS non-#00FF00 backgrounds (exit code 4 with regen recommendation; bypass with `--force-chroma`), tightens default tolerance from 90 to 45 (yellow design colors no longer fall inside the match window), and auto-crops to the design's tight bounding box (so Phase 3 sizing reflects the actual design extent, not the AI canvas + transparent margin). (2) New `ah_pick_dimensions <design_path> <area_w> <area_h>` script that computes correct `(width, height, left, top)` from the design's actual aspect ratio + the print area + a placement style preset (`chest_fill` default, `chest_emblem`, `back_center`, `all_over`). Codifies the math AND the constraint (never overshoot area_height by default, which would cause Printful to crop at print time). Replaces the soft "80-90% of area_width" guidance that the agent kept undershooting. (3) Phase 1 prompt example strengthened with explicit "NOT yellow-green or olive" guidance. SKILL.md helpers table + product-creation-pipeline.md Phase 2 / Phase 3c / Phase 3d / Phase 4 print_data + front-print-tee.md all updated. |
 | 1.7 | 2026-06-01 | Three new packaged scripts kill the remaining inline-bash expansion prompts surfaced during Test 2 validation: `ah_poll_mockup` (collapses Phase 3 job-status poll + Phase 3.5 S3-ingestion poll into one call against the job-status endpoint), `ah_classify_previews` (parses preview rows by color + angle from the provider CDN filename slug; `--recommend` writes a JSON with `display_image` + curated `gallery_images` ready to paste literally into product create), `ah_pick_provider_url` (extracts one URL by color+angle, no jq filter needed). Content fix: removed all references to `GET /merchandise/product/preview-job/<job>/previews` — that listing endpoint returned 0 rows in the field even after preview_url was populated; the job-status endpoint carries the preview rows directly. `settings.recommended.json` extended with the three new patterns. SKILL.md "Other packaged helpers" section added with a one-line rule of thumb: if you're writing more than one shell line for a workflow step, there's probably a packaged script for it. |
 | 1.6 | 2026-06-01 | Documents the img2img edit modes on `POST /images/generate`. The endpoint is overloaded — same path for text-to-image AND editing, mode determined by whether `source_image_uuid` (JSON) / `images=@...` (multipart) is present. New section 5b in `references/design-rules.md` covers the request shape, the `source_image_uuid` field-name gotcha (NOT `image_uuid`), `additional_image_uuids` for multi-image reference, and the source-compatibility matrix (only Nano Banana + OpenAI support edit; Replicate-backed sources 422). SKILL.md decision tree + Phase 1 reference pointer updated. |
 | 1.5 | 2026-06-01 | New `scripts/ah_check` — start-of-session auth probe (verifies key is set AND valid, prints masked confirmation, distinguishes missing vs revoked). Replaces the `echo "${APPARELHUB_API_KEY:?...}"` pattern that still tripped expansion prompts in v1.4. New `scripts/install_path.sh` — one-time PATH setup that detects bash / zsh / fish, idempotent, replaces the manual `echo ... >> ~/.bashrc` instruction. SKILL.md auth section + Install section updated. |

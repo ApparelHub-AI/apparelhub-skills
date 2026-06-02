@@ -19,6 +19,8 @@
       "Bash(*apparelhub/scripts/ah_classify_previews *)",
       "Bash(ah_pick_provider_url *)",
       "Bash(*apparelhub/scripts/ah_pick_provider_url *)",
+      "Bash(ah_pick_dimensions *)",
+      "Bash(*apparelhub/scripts/ah_pick_dimensions *)",
       "Bash(curl -sS https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X POST https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X PATCH https://api.apparelhub.ai/agents/v1/*)",
