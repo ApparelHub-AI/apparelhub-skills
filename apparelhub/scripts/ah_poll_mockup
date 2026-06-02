@@ -11,20 +11,35 @@ after the job-status endpoint reported preview_url populated.
 
 Usage:
     ah_poll_mockup <provider_uuid> <job_uuid>
-                   [--timeout SECONDS]   default 1800 (30 min)
-                   [--interval SECONDS]  default 8
-                   [--out PATH]          default /tmp/preview_job.json
-                   [--min-ready N]       default 1
+                   [--timeout SECONDS]              default 1800 (30 min)
+                   [--interval SECONDS]             default 8
+                   [--out PATH]                     default /tmp/preview_job.json
+                   [--min-ready N]                  default 1
+                   [--max-transient-errors N]      default 5
 
 Exit codes:
     0 — job completed AND >= min-ready previews have preview_url
-    1 — timeout, job failed, or auth/network error
+    1 — timeout, job failed, auth error, or too many consecutive transient errors
     2 — APPARELHUB_API_KEY not set, or bad CLI args
 
 Why this exists: inline `for` loops with $(...) command substitution trip
 Claude Code's simple_expansion check on every iteration regardless of
 allowlist. Wrapping the poll in a packaged script keeps the agent's visible
 command line expansion-free.
+
+Transient error handling (v1.11+): the job-status endpoint occasionally
+returns HTTP 5xx (most commonly 504 from API Gateway when our Lambda is
+mid-S3-ingestion or Printful's upstream is slow). These are EXPECTED during
+polling — the job is still progressing in the background. The script treats
+the following as transient and keeps polling:
+  - HTTP 502 (Bad Gateway)
+  - HTTP 503 (Service Unavailable)
+  - HTTP 504 (Gateway Timeout)
+  - HTTP 429 (Too Many Requests)
+  - URLError (TCP connect failure, DNS, etc.)
+Up to --max-transient-errors consecutive failures (default 5) before bailing.
+Counter resets to 0 on any successful poll. 4xx (other than 429) and other
+5xx codes are still fatal.
 """
 
 from __future__ import annotations
@@ -76,6 +91,10 @@ def main() -> int:
     ap.add_argument("--interval", type=int, default=8)
     ap.add_argument("--out", default="/tmp/preview_job.json")
     ap.add_argument("--min-ready", type=int, default=1)
+    ap.add_argument("--max-transient-errors", type=int, default=5,
+                    help="consecutive transient errors (504/502/503/429/URLError) to "
+                         "tolerate before bailing. Counter resets on any success. "
+                         "Default 5.")
     args = ap.parse_args()
 
     api_key = os.environ.get("APPARELHUB_API_KEY")
@@ -91,6 +110,11 @@ def main() -> int:
     poll_n = 0
     last_payload: dict | None = None
     last_status: str | None = None
+    transient_errors_in_a_row = 0
+
+    # HTTP status codes that indicate a transient upstream/gateway issue —
+    # the job is still progressing on the platform side, just retry.
+    TRANSIENT_HTTP_CODES = {502, 503, 504, 429}
 
     while True:
         poll_n += 1
@@ -98,6 +122,30 @@ def main() -> int:
         try:
             payload = fetch_job(args.provider_uuid, args.job_uuid, api_key)
         except urllib.error.HTTPError as e:
+            if e.code in TRANSIENT_HTTP_CODES:
+                transient_errors_in_a_row += 1
+                if transient_errors_in_a_row > args.max_transient_errors:
+                    sys.stderr.write(
+                        f"ah_poll_mockup: {transient_errors_in_a_row} consecutive transient "
+                        f"errors (last was HTTP {e.code}); exceeded --max-transient-errors "
+                        f"{args.max_transient_errors}. Bailing.\n"
+                    )
+                    return 1
+                if elapsed >= args.timeout:
+                    sys.stderr.write(
+                        f"ah_poll_mockup: timeout after {args.timeout}s during transient "
+                        f"HTTP {e.code} retry loop.\n"
+                    )
+                    return 1
+                print(
+                    f"poll {poll_n} ({elapsed}s): transient HTTP {e.code} "
+                    f"(retry {transient_errors_in_a_row}/{args.max_transient_errors}, "
+                    f"sleeping {args.interval}s)",
+                    flush=True,
+                )
+                time.sleep(args.interval)
+                continue
+            # Non-transient HTTP error — bail.
             sys.stderr.write(
                 f"ah_poll_mockup: HTTP {e.code} from job endpoint "
                 f"(provider={args.provider_uuid}, job={args.job_uuid})\n"
@@ -108,12 +156,35 @@ def main() -> int:
                 )
             return 1
         except urllib.error.URLError as e:
-            sys.stderr.write(f"ah_poll_mockup: network failure: {e.reason}\n")
-            return 1
+            # Network-layer failure (DNS, TCP, TLS). Treat as transient.
+            transient_errors_in_a_row += 1
+            if transient_errors_in_a_row > args.max_transient_errors:
+                sys.stderr.write(
+                    f"ah_poll_mockup: {transient_errors_in_a_row} consecutive network "
+                    f"failures (last: {e.reason}); exceeded --max-transient-errors "
+                    f"{args.max_transient_errors}. Bailing.\n"
+                )
+                return 1
+            if elapsed >= args.timeout:
+                sys.stderr.write(
+                    f"ah_poll_mockup: timeout after {args.timeout}s during network "
+                    f"retry loop ({e.reason}).\n"
+                )
+                return 1
+            print(
+                f"poll {poll_n} ({elapsed}s): network failure ({e.reason}) "
+                f"(retry {transient_errors_in_a_row}/{args.max_transient_errors}, "
+                f"sleeping {args.interval}s)",
+                flush=True,
+            )
+            time.sleep(args.interval)
+            continue
         except json.JSONDecodeError:
             sys.stderr.write("ah_poll_mockup: non-JSON response from job endpoint\n")
             return 1
 
+        # Successful response — reset the transient counter
+        transient_errors_in_a_row = 0
         last_payload = payload
         # Persist on every poll so the agent can inspect partial state if
         # something goes wrong mid-loop.
