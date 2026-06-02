@@ -176,11 +176,11 @@ The script prints JSON to stdout AND writes to `--out`:
   "design_size": [664, 527],
   "area_size": [728, 376],
   "style": "chest_fill",
-  "width": 427,
-  "height": 339,
-  "left": 150,
-  "top": 37,
-  "rationale": "design aspect (1.26) is taller than the available height (area_h=376 minus collar_padding=37), so scaled to fit available_height = 339px; resulting width 427px = 59% of area_width, top=37px (10% of area_height for collar breathing room).",
+  "width": 413,
+  "height": 328,
+  "left": 157,
+  "top": 48,
+  "rationale": "design aspect (1.26) is taller than the available height (area_h=376 minus collar_padding=48), so scaled to fit available_height = 328px; resulting width 413px = 57% of area_width, top=48px (13% of area_height for collar breathing room).",
   "strategy": "height_constrained"
 }
 ```
@@ -199,19 +199,21 @@ The skill used to say "use 80-90% of area_width." That guidance:
 
 ### Style presets
 
-- `chest_fill` (default) — 88% of area_width, scaled to preserve aspect ratio. Reserves 10% of area_height at the top as breathing room between the collar seam and the design (tunable with `--collar-padding-pct`). Scales the design DOWN if needed so it fits entirely within the available height (area_h minus collar padding) without crop.
+- `chest_fill` (default) — 88% of area_width, scaled to preserve aspect ratio. Reserves 13% of area_height at the top as breathing room between the collar seam and the design (~0.8" on BC 3001 front; tunable with `--collar-padding-pct`). Scales the design DOWN if needed so it fits entirely within the available height (area_h minus collar padding) without crop.
 - `chest_emblem` — 35% of area_width, centered both axes. For small badge / logo prints.
 - `back_center` — same sizing math as chest_fill but vertically centered. NO collar padding (back placements don't have a collar problem; centering already gives even top/bottom breathing room).
 - `all_over` — width=area_width, height=area_height, top=0, left=0. For pillows, doormats, full-bleed designs. See `references/all-over-print.md`.
 
 ### Tuning the collar padding
 
-Default 10% of area_height = ~0.6" breathing room on BC 3001 front. Adjust with `--collar-padding-pct`:
+Default 13% of area_height = ~0.8" breathing room on BC 3001 front (728×376 at ~60.7 px/inch). Adjust with `--collar-padding-pct`:
 
-- `0.05` — tight (~0.3"), design is more substantial but very close to the collar
-- `0.10` (default) — balanced, typical chest-print breathing room
-- `0.15` — generous (~0.9"), design is smaller but visually anchored well below the collar
 - `0.0` — flush with the print area top edge (v1.8 behavior — designs end up touching the collar, NOT recommended)
+- `0.05` — tight (~0.3"), design is more substantial but very close to the collar
+- `0.10` — tighter than default (~0.6"), was the v1.9 default
+- `0.13` (default) — ~0.8", typical retail chest-print breathing room
+- `0.15` — generous (~0.9"), design is smaller but visually anchored well below the collar
+- `0.20` — extra generous (~1.2"), design pushed lower toward the mid-chest
 
 For embroidery: tight placement on the chest-left or similar. Use `--style chest_emblem` and a smaller `--fill-ratio` if needed. See `references/embroidery.md` for the 541×541 anorak example.
 
@@ -230,10 +232,10 @@ ah_curl POST /agents/v1/merchandise/product/preview -d '{
       "image_url": "<image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 427,
-      "height": 339,
-      "top": 37,
-      "left": 150
+      "width": 413,
+      "height": 328,
+      "top": 48,
+      "left": 157
     }
   ],
   "variant_ids": [4016, 4017, 4018, 4019, 4020, 8495, 8496, 8497, 8498, 8499, 4012, 4013, 4014, 4015, 4011]
@@ -367,10 +369,10 @@ ah_curl POST /agents/v1/product/create -d '{
       "image_url": "<original_image_url>",
       "area_width": 728,
       "area_height": 376,
-      "width": 427,
-      "height": 339,
-      "top": 37,
-      "left": 150
+      "width": 413,
+      "height": 328,
+      "top": 48,
+      "left": 157
     }
   ]
 }'

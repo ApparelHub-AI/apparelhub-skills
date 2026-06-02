@@ -64,7 +64,7 @@ def compute(
     area_h: int,
     style: str,
     fill_ratio: float,
-    collar_padding_pct: float = 0.10,
+    collar_padding_pct: float = 0.13,
 ) -> dict:
     """Return {"width", "height", "left", "top", "rationale", "strategy"}."""
     if design_w <= 0 or design_h <= 0:
@@ -187,12 +187,14 @@ def main() -> int:
     ap.add_argument("--fill-ratio", type=float, default=0.88,
                     help="fraction of area_width to fill (chest_fill / back_center only). "
                          "Default 0.88. 0.85 = comfortable, 0.92 = very full chest.")
-    ap.add_argument("--collar-padding-pct", type=float, default=0.10,
+    ap.add_argument("--collar-padding-pct", type=float, default=0.13,
                     help="fraction of area_height reserved as breathing room between the "
                          "collar seam and the top of the design (chest_fill only). "
-                         "Default 0.10 (~0.6\" on BC 3001 front). 0.0 = flush with print "
-                         "area top edge (v1.8 behavior — designs ended up touching the "
-                         "collar). 0.15 = generous space. Cap practically at 0.30.")
+                         "Default 0.13 (~0.8\" on BC 3001 front, 728x376 print area at "
+                         "60.7 px/inch). 0.0 = flush with print area top edge (v1.8 "
+                         "behavior — designs ended up touching the collar). 0.10 = "
+                         "tighter (~0.6\", was the v1.9 default). 0.15 = generous "
+                         "(~0.9\"). 0.20 = ~1.2\". Cap practically at 0.30.")
     ap.add_argument("--out", default=None,
                     help="write the dimensions JSON to this path in addition to stdout")
     args = ap.parse_args()
