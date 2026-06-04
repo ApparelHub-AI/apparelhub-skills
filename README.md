@@ -1,6 +1,18 @@
 # ApparelHub Skills
 
-Claude Code skills for [ApparelHub.ai](https://apparelhub.ai) — the print-on-demand design and orchestration platform. Drop these into your Claude Code skills directory to let Claude design AI-generated apparel, generate product mockups, create products, and sync them to your sales channels via the ApparelHub Agent API.
+Make [ApparelHub.ai](https://apparelhub.ai) agent-controllable from [Claude Code](https://docs.claude.com/en/docs/claude-code). This repo packages a Claude Code skill that lets your agent design AI-generated apparel, generate product mockups, create products, manage variants, sync to sales channels, and track orders, all via the ApparelHub Agent API.
+
+**Who this is for**
+
+- Claude Code users who want to run a print-on-demand business from their terminal
+- Builders of custom Claude harnesses who want first-class access to ApparelHub's product, mockup, store, and order endpoints
+- Anyone with an ApparelHub account on the Professional or Enterprise tier
+
+**Quick links**
+
+- Full setup walkthrough: <https://apparelhub.ai/agents>
+- Browser API reference: <https://apparelhub.ai/developer/api-docs>
+- Generate an API key: <https://apparelhub.ai/developer/api-keys>
 
 ---
 
@@ -42,20 +54,55 @@ Claude reads `SKILL.md` whenever the user asks about ApparelHub workflows, then 
 
 ## Install
 
-Claude Code looks for skills under `~/.claude/skills/<name>/SKILL.md`. Clone or copy the skill directory there:
+### One-line installer (recommended)
 
 ```bash
-# Clone the repo somewhere
-git clone https://github.com/ApparelHub-AI/apparelhub-skills.git ~/code/apparelhub-skills
+curl -fsSL https://apparelhub.ai/install-skill.sh | bash
+```
 
-# Symlink (or copy) the apparelhub skill into your Claude Code skills dir
+The installer:
+
+1. Clones this repo to `~/.apparelhub-skills`
+2. Symlinks it into `~/.claude/skills/apparelhub`
+3. Adds the scripts dir to your shell PATH (bash, zsh, fish)
+4. Prompts for your ApparelHub API key and stores it in `~/.apparelhub-skills/.env` (chmod 600), then sources it from your shell rc file
+5. Runs `ah_check` to verify the key works against the platform
+
+It's idempotent. Re-run it any time to pull the latest skill version and re-verify your key. Inspect it before piping to bash if you'd like:
+
+```bash
+curl -fsSL https://apparelhub.ai/install-skill.sh | less
+```
+
+If your key is already in env, the script won't prompt:
+
+```bash
+APPARELHUB_API_KEY=ah_... bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
+```
+
+Open a new terminal (or `source` your rc file) and Claude Code can use the skill on its next session.
+
+### Manual install
+
+If you'd rather wire it up by hand:
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/ApparelHub-AI/apparelhub-skills.git ~/.apparelhub-skills
+
+# 2. Symlink the skill into Claude Code's skills dir
 mkdir -p ~/.claude/skills
-ln -s ~/code/apparelhub-skills/apparelhub ~/.claude/skills/apparelhub
+ln -s ~/.apparelhub-skills/apparelhub ~/.claude/skills/apparelhub
 
-# One-time: put the scripts dir on PATH so the agent can invoke `ah_check`,
-# `ah_curl`, and `make_transparent.py` by bare name. Idempotent; detects
-# bash / zsh / fish automatically.
+# 3. Put the scripts dir on PATH (idempotent; detects bash / zsh / fish)
 bash ~/.claude/skills/apparelhub/scripts/install_path.sh
+
+# 4. Set + persist your API key
+export APPARELHUB_API_KEY=ah_...   # generate at apparelhub.ai/developer/api-keys
+echo "export APPARELHUB_API_KEY=$APPARELHUB_API_KEY" >> ~/.bashrc   # or ~/.zshrc
+
+# 5. Verify
+~/.claude/skills/apparelhub/scripts/ah_check
 ```
 
 Restart Claude Code; the skill is available next session.
@@ -164,6 +211,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.12 | 2026-06-04 | New top-level `install.sh` plus a rewritten README lead and Install section. Was: "find the GitHub repo, figure out where to clone, set up the symlink manually, find install_path.sh, set the env var, find ah_check, run it". Five-plus manual steps. Now: `curl -fsSL https://apparelhub.ai/install-skill.sh \| bash`. The installer clones to `~/.apparelhub-skills`, symlinks into `~/.claude/skills/apparelhub`, adds the scripts dir to PATH via the existing `install_path.sh`, prompts for the API key against `/dev/tty` (so it works under `curl ... \| bash` where stdin is the script body), stores the key in `~/.apparelhub-skills/.env` with `chmod 600`, sources it from the right rc file (bash / zsh / fish), and runs `ah_check` as the success gate. Idempotent end-to-end: re-running pulls the latest skill version, leaves existing rc entries alone, and re-verifies the key. README lead now leads with "what is this and who is it for" + links to apparelhub.ai/agents + apparelhub.ai/developer/api-keys + apparelhub.ai/developer/api-docs before any install instructions. Manual install path preserved below the one-liner for users who prefer it. |
 | 1.11 | 2026-06-02 | A real Test 2 session caught `ah_poll_mockup` exiting on the first transient HTTP 504 from the job-status endpoint. 504s on that endpoint are EXPECTED during polling — they happen when our Lambda is mid-S3-ingestion (downloading mockups from Printful → uploading to our S3) or when Printful's upstream is slow, and API Gateway times out at 30s. The job is still progressing on the platform side; the agent should just retry. v1.11 treats 502 / 503 / 504 / 429 / `URLError` as transient and continues polling. New `--max-transient-errors` flag (default 5) caps consecutive failures before bailing; the counter resets on any successful poll. Each retry prints `poll N (Ts): transient HTTP 504 (retry M/5, sleeping 8s)` so the agent can see what's happening. Wall-clock `--timeout` still applies during retry loops so a permanently-broken endpoint can't hang forever. Non-transient HTTP errors (400, 401, 403, 404, 500, etc.) still fail fast. |
 | 1.10 | 2026-06-02 | Tune the v1.9 collar padding default from 10% (~0.6") to 13% (~0.8") of area_height. After looking at the v1.9 mockup, Tony confirmed that ~0.8" is the right standard chest-print breathing room — what you'd expect on a retail t-shirt. On BC 3001 front (728×376 at 60.7 px/inch), 13% of area_height = 48px = ~0.79". Worked example in docs updated from `width=427, height=339, top=37` to `width=413, height=328, top=48`. The previous default 0.10 is still documented as the "tighter than default" tuning value; new entries 0.05 (~0.3"), 0.10 (~0.6"), 0.13 (default ~0.8"), 0.15 (~0.9"), 0.20 (~1.2") give the merchant a complete reference table. Behavior change: every Phase 3 chest_fill invocation now produces slightly shifted-down + slightly smaller dimensions vs v1.9. |
 | 1.9 | 2026-06-02 | One quality polish on top of v1.8: a real Test 2 session showed that v1.8's `chest_fill` style with `top: 0` pushed the design flush against the collar seam (zero breathing room between the printed design and the t-shirt collar). `ah_pick_dimensions` now reserves 10% of `area_height` at the top as collar breathing room by default, tunable with the new `--collar-padding-pct` flag (range `[0, 1.0)`). On BC 3001 front (728×376) this gives ~37px / ~0.6" of space between the collar and the design. The height-constrained branch correctly shrinks the design to fit within `area_height - collar_padding` so nothing overshoots. `back_center` is unaffected (already vertically centered). Worked example in the docs updated from `width=473, height=376, top=0` to `width=427, height=339, top=37`. Two reference tuning values documented: `--collar-padding-pct 0.05` (~0.3" tight) and `0.15` (~0.9" generous). Pass `0.0` to restore v1.8 behavior. |
