@@ -165,10 +165,17 @@ if [ -z "$API_KEY" ]; then
        Re-run with the key supplied as an environment variable:
          APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\"
 
-       If your Claude agent is doing the install for you, just send it
-       a chat message like:
-         \"Install ApparelHub. My API key is ah_...\"
-       and Claude will set the env var and re-run this script.
+       If your Claude agent is doing the install for you, send it a
+       SELF-CONTAINED chat message. Claude has no prior knowledge of
+       ApparelHub, so the prompt must include the exact command. For
+       example:
+         \"Please run this exact command for me:
+          APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\"
+          This is the ApparelHub installer; source is at
+          https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh.\"
+
+       Or copy a ready-made bridge prompt with your key pre-filled from
+       https://apparelhub.ai/developer/api-keys (Bridge / Docker tab).
 
        Generate a key at https://apparelhub.ai/developer/api-keys"
     fi
