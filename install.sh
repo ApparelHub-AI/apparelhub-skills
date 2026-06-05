@@ -58,9 +58,12 @@ done
 ok "git + curl available"
 
 if ! command -v claude >/dev/null 2>&1; then
-    warn "claude CLI not found on PATH."
-    warn "The skill will install correctly but you'll need Claude Code"
-    warn "(https://docs.claude.com/en/docs/claude-code) to use it."
+    # Soft note rather than a red warning. Many users invoke Claude through
+    # bridges (claude-bridge, OpenClaw, web UIs that proxy into a container)
+    # where the `claude` binary is never on the local PATH. The install still
+    # works correctly in those setups.
+    printf '%s   .. claude CLI not on PATH (fine if you use a bridge / web UI / Docker harness)%s\n' \
+        "$C_DIM" "$C_RESET"
 fi
 
 # ---- repo clone / pull ------------------------------------------------------
@@ -148,17 +151,39 @@ if [ -z "$API_KEY" ] && [ -f "$ENV_FILE" ]; then
 fi
 
 if [ -z "$API_KEY" ]; then
-    if [ ! -r /dev/tty ]; then
-        fail "no API key supplied and no terminal available to prompt.
-       Re-run with the key in env:
+    # Probe whether we can actually OPEN /dev/tty for read, not just whether
+    # the file exists. Docker / bridge containers usually have the device
+    # node present (so `[ -r /dev/tty ]` is misleadingly true), but opening
+    # it for read fails because nothing is on the other end. Run the open
+    # in a subshell so a failure doesn't take down the install script.
+    if ! ( exec 3</dev/tty ) 2>/dev/null; then
+        fail "no API key supplied and no interactive terminal is attached
+       to this install. This is normal in Docker bridges (claude-bridge,
+       OpenClaw), CI runners, and similar harnesses where the agent has
+       no controlling terminal.
+
+       Re-run with the key supplied as an environment variable:
          APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\"
-       Or generate a key at https://apparelhub.ai/developer/api-keys"
+
+       If your Claude agent is doing the install for you, just send it
+       a chat message like:
+         \"Install ApparelHub. My API key is ah_...\"
+       and Claude will set the env var and re-run this script.
+
+       Generate a key at https://apparelhub.ai/developer/api-keys"
     fi
     printf "\n   Generate a key at %shttps://apparelhub.ai/developer/api-keys%s\n" "$C_DIM" "$C_RESET"
     printf "   Paste your ApparelHub API key (input hidden): "
     IFS= read -rs API_KEY </dev/tty || true
     printf '\n'
-    [ -n "$API_KEY" ] || fail "no key entered"
+    if [ -z "$API_KEY" ]; then
+        # Belt + suspenders: if the read failed despite our probe passing
+        # (race, slow tty open, etc.), still surface the bridge-aware copy
+        # instead of the prior generic "no key entered" line.
+        fail "no key entered. If you intended to install non-interactively
+       (Docker / bridge / CI), supply the key as an env var:
+         APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\""
+    fi
 fi
 
 # Write the .env (bash-compatible). Fish gets a parallel .env.fish below.
@@ -215,12 +240,32 @@ cat <<EOF
 
 ${C_GREEN}Done.${C_RESET} The ApparelHub skill is installed.
 
-Next steps:
-  - Open a new terminal (or run: source ${RC_FILE:-your shell rc file})
-    so the next shell has PATH + APPARELHUB_API_KEY set
-  - Open Claude Code; ask it to design a tee or list your products
-  - Recommended permission allowlist for fewer prompts:
+Next step depends on how you talk to Claude:
+
+  ${C_BLUE}- Claude Code (CLI):${C_RESET}
+      Open a new terminal (or run: source ${RC_FILE:-your shell rc file})
+      so the next shell has PATH + APPARELHUB_API_KEY set, then run
+      \`claude\` and ask it to design a tee or list your products.
+
+  ${C_BLUE}- Bridge / Docker / web UI talking to Claude in a container${C_RESET}
+    ${C_BLUE}  (claude-bridge, OpenClaw, etc.):${C_RESET}
+      Start a NEW conversation. Claude discovers skills at session start,
+      so the running session won't see ApparelHub until you open a fresh
+      conversation. No terminal restart needed.
+
+  ${C_BLUE}- Claude Web or any other AI agent (Codex, ChatGPT, Gemini, ...):${C_RESET}
+      The skill files were installed locally, but Claude Web and other
+      agents can't read your local filesystem. Use the bootstrap prompt
+      instead:
+        ${REPO_DIR}/apparelhub/BOOTSTRAP-PROMPT.md
+      Paste its contents into your agent's project / system prompt and
+      provide your API key as an env var or in the prompt.
+
+Useful files:
+  - Recommended permission allowlist (drops permission prompts):
       ${REPO_DIR}/settings.recommended.json
+  - Universal bootstrap prompt for any LLM:
+      ${REPO_DIR}/apparelhub/BOOTSTRAP-PROMPT.md
   - Full setup docs: https://apparelhub.ai/agents
   - API reference:   https://apparelhub.ai/developer/api-docs
 

@@ -5,7 +5,8 @@ Make [ApparelHub.ai](https://apparelhub.ai) agent-controllable from [Claude Code
 **Who this is for**
 
 - Claude Code users who want to run a print-on-demand business from their terminal
-- Builders of custom Claude harnesses who want first-class access to ApparelHub's product, mockup, store, and order endpoints
+- Builders of custom Claude harnesses who want first-class access to ApparelHub's product, mockup, store, and order endpoints — including users on a Claude bridge (claude-bridge, OpenClaw) or any Docker-Claude harness
+- Users of Claude Web, ChatGPT, Codex, Gemini, or any other AI agent — see [`apparelhub/BOOTSTRAP-PROMPT.md`](./apparelhub/BOOTSTRAP-PROMPT.md) for the universal copy-paste system prompt
 - Anyone with an ApparelHub account on the Professional or Enterprise tier
 
 **Quick links**
@@ -81,6 +82,40 @@ APPARELHUB_API_KEY=ah_... bash -c "$(curl -fsSL https://apparelhub.ai/install-sk
 ```
 
 Open a new terminal (or `source` your rc file) and Claude Code can use the skill on its next session.
+
+### Install when Claude runs inside a bridge or Docker container
+
+If you talk to Claude through a bridge (claude-bridge, OpenClaw, a web/Telegram proxy, etc.) the agent itself usually has no controlling terminal — so the interactive prompt above can't fire. The cleanest path: send Claude a chat message with your key inline and let Claude run the install on your behalf:
+
+> "Install ApparelHub. My API key is `ah_xxxxxxxxxxxx`."
+
+Claude will execute:
+
+```bash
+APPARELHUB_API_KEY=ah_xxxxxxxxxxxx bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
+```
+
+After it finishes, **start a new conversation** — Claude discovers skills at session start, so the running session won't pick up the new skill until you open a fresh chat. No terminal restart needed.
+
+**For operators baking the skill into a Docker image**, install at build time so it survives container rebuilds:
+
+```dockerfile
+RUN git clone --depth=1 https://github.com/ApparelHub-AI/apparelhub-skills.git /opt/apparelhub-skills \
+ && mkdir -p /root/.claude/skills \
+ && ln -s /opt/apparelhub-skills/apparelhub /root/.claude/skills/apparelhub \
+ && bash /opt/apparelhub-skills/apparelhub/scripts/install_path.sh
+# Supply APPARELHUB_API_KEY at runtime via `docker run -e` or a mounted .env
+```
+
+### Use ApparelHub from Claude Web or any other AI agent (Codex, ChatGPT, Gemini, ...)
+
+Claude Web, ChatGPT, Codex, Gemini, and most non-Claude-Code agents don't have a `~/.claude/skills/` equivalent — they only see what's in the conversation or system prompt. For those:
+
+1. Generate a key at <https://apparelhub.ai/developer/api-keys>
+2. Open [`apparelhub/BOOTSTRAP-PROMPT.md`](./apparelhub/BOOTSTRAP-PROMPT.md), copy the block between the `=====` markers, and paste it into your agent's **system prompt** / **custom instructions** / **project instructions**
+3. Provide your key (env var or in-conversation) and ask the agent to do an apparel task
+
+The bootstrap prompt is intentionally compact — auth header, base URL, the 10-step product-creation pipeline, the critical conventions, and links to the deeper references on GitHub. Enough to drive the platform without the packaged helper scripts.
 
 ### Manual install
 
@@ -211,6 +246,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.13 | 2026-06-05 | Multi-harness install support and a universal bootstrap prompt for non-Claude-Code agents. `install.sh` now (a) treats a missing `claude` CLI as a soft note instead of a red warning (it's normal for bridge / Docker / web-UI setups where the agent talks to Claude through a different transport), (b) expands the no-TTY failure message to call out Docker-bridge scenarios explicitly with a suggested chat-message form a bridge user can send to their Claude (`"Install ApparelHub. My API key is ah_..."`), and (c) rewrites the "Done" message into three paths — Claude Code CLI users get the "open a new terminal" instruction; bridge / container users get "start a new conversation, no terminal restart needed"; Claude Web / Codex / Gemini users get pointed at the new bootstrap file. New `apparelhub/BOOTSTRAP-PROMPT.md` is a copy-paste system-prompt block for any LLM that ISN'T Claude Code — gives the agent enough scaffolding (auth header, base URL, the 10-step product pipeline, the critical-conventions list, links to the GitHub references for deeper workflows) to drive the Agent API without needing the packaged helper scripts. Pairs with the redesigned `apparelhub.ai/agents` page that now has three install paths (CLI / bridge / web+other), each capped at 3 steps. |
 | 1.12 | 2026-06-04 | New top-level `install.sh` plus a rewritten README lead and Install section. Was: "find the GitHub repo, figure out where to clone, set up the symlink manually, find install_path.sh, set the env var, find ah_check, run it". Five-plus manual steps. Now: `curl -fsSL https://apparelhub.ai/install-skill.sh \| bash`. The installer clones to `~/.apparelhub-skills`, symlinks into `~/.claude/skills/apparelhub`, adds the scripts dir to PATH via the existing `install_path.sh`, prompts for the API key against `/dev/tty` (so it works under `curl ... \| bash` where stdin is the script body), stores the key in `~/.apparelhub-skills/.env` with `chmod 600`, sources it from the right rc file (bash / zsh / fish), and runs `ah_check` as the success gate. Idempotent end-to-end: re-running pulls the latest skill version, leaves existing rc entries alone, and re-verifies the key. README lead now leads with "what is this and who is it for" + links to apparelhub.ai/agents + apparelhub.ai/developer/api-keys + apparelhub.ai/developer/api-docs before any install instructions. Manual install path preserved below the one-liner for users who prefer it. |
 | 1.11 | 2026-06-02 | A real Test 2 session caught `ah_poll_mockup` exiting on the first transient HTTP 504 from the job-status endpoint. 504s on that endpoint are EXPECTED during polling — they happen when our Lambda is mid-S3-ingestion (downloading mockups from Printful → uploading to our S3) or when Printful's upstream is slow, and API Gateway times out at 30s. The job is still progressing on the platform side; the agent should just retry. v1.11 treats 502 / 503 / 504 / 429 / `URLError` as transient and continues polling. New `--max-transient-errors` flag (default 5) caps consecutive failures before bailing; the counter resets on any successful poll. Each retry prints `poll N (Ts): transient HTTP 504 (retry M/5, sleeping 8s)` so the agent can see what's happening. Wall-clock `--timeout` still applies during retry loops so a permanently-broken endpoint can't hang forever. Non-transient HTTP errors (400, 401, 403, 404, 500, etc.) still fail fast. |
 | 1.10 | 2026-06-02 | Tune the v1.9 collar padding default from 10% (~0.6") to 13% (~0.8") of area_height. After looking at the v1.9 mockup, Tony confirmed that ~0.8" is the right standard chest-print breathing room — what you'd expect on a retail t-shirt. On BC 3001 front (728×376 at 60.7 px/inch), 13% of area_height = 48px = ~0.79". Worked example in docs updated from `width=427, height=339, top=37` to `width=413, height=328, top=48`. The previous default 0.10 is still documented as the "tighter than default" tuning value; new entries 0.05 (~0.3"), 0.10 (~0.6"), 0.13 (default ~0.8"), 0.15 (~0.9"), 0.20 (~1.2") give the merchant a complete reference table. Behavior change: every Phase 3 chest_fill invocation now produces slightly shifted-down + slightly smaller dimensions vs v1.9. |
