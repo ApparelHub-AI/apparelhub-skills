@@ -16,13 +16,13 @@ ApparelHub is a print-on-demand design and orchestration platform. Use this skil
 
 You talk to ApparelHub via its Agent API at `https://api.apparelhub.ai/agents/v1/`.
 
-This SKILL.md is the router. Detailed playbooks live in `references/` and end-to-end walkthroughs in `examples/`. Load them on demand — don't try to memorize the entire skill upfront.
+This SKILL.md is the router. Detailed playbooks live in `references/` and end-to-end walkthroughs in `examples/`. Load them on demand. Don't try to memorize the entire skill upfront.
 
 ---
 
-## 1. Authentication — ALWAYS use `ah_curl`
+## 1. Authentication: ALWAYS use `ah_curl`
 
-Every API call needs the user's ApparelHub API key in the `x-api-key` header. **Do NOT compose `curl ... -H "x-api-key: $APPARELHUB_API_KEY"` yourself** — Claude Code's permission system prompts on any command containing `$VAR` expansion regardless of how broad your allowlist is. The bundled `scripts/ah_curl` wrapper hides the env-var read INSIDE the script so your command line stays expansion-free.
+Every API call needs the user's ApparelHub API key in the `x-api-key` header. **Do NOT compose `curl ... -H "x-api-key: $APPARELHUB_API_KEY"` yourself.** Claude Code's permission system prompts on any command containing `$VAR` expansion regardless of how broad your allowlist is. The bundled `scripts/ah_curl` wrapper hides the env-var read INSIDE the script so your command line stays expansion-free.
 
 ### How to invoke
 
@@ -46,8 +46,8 @@ The allowlist patterns in `settings.recommended.json` match BOTH forms.
 ah_curl METHOD PATH_OR_URL [extra curl args...]
 ```
 
-- `METHOD` — `GET`, `POST`, `PATCH`, `PUT`, `DELETE` (uppercase, no `-X` prefix)
-- `PATH_OR_URL` — an absolute path (prepended with `https://api.apparelhub.ai`) or a full URL
+- `METHOD`: `GET`, `POST`, `PATCH`, `PUT`, `DELETE` (uppercase, no `-X` prefix)
+- `PATH_OR_URL`: an absolute path (prepended with `$APPARELHUB_API_BASE`, default `https://api.apparelhub.ai`) or a full URL
 - Extra args pass through to curl unchanged: `-d '{...}'` for JSON bodies, `-F image=@/tmp/x.png` for multipart, `-o /tmp/out` to save the response
 
 ### Examples
@@ -69,38 +69,38 @@ ah_check
 ```
 
 Exit codes:
-- **0** — key is set and valid. Output looks like `ah_check: ok (key xxxxxxx...yyyy, target https://api.apparelhub.ai)`. Proceed.
-- **2** — key is not set in the environment. Tell the user:
+- **0**: key is set and valid. Output looks like `ah_check: ok (key xxxxxxx...yyyy, target https://api.apparelhub.ai)`. Proceed.
+- **2**: key is not set in the environment. Tell the user:
   > You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=<your-key>`
-- **3** — key is set but rejected (401/403). Likely revoked, expired, or from the wrong environment. Tell the user to check `https://apparelhub.ai/developer/api-keys`. The error message includes the target URL — make sure the key was generated for the same environment (prod keys do not work against dev and vice versa).
+- **3**: key is set but rejected (401/403). Likely revoked, expired, or from the wrong environment. Tell the user to check `https://apparelhub.ai/developer/api-keys`. The error message includes the target URL, so make sure the key was generated for the same environment (prod keys do not work against dev and vice versa).
 
 ### Environment targeting
 
-By default all packaged scripts (`ah_check`, `ah_curl`, `ah_poll_mockup`) target the **production** Agent API at `https://api.apparelhub.ai`. Internal contributors / Tony's dev testing can target the dev stack by exporting `APPARELHUB_API_BASE=https://api.dev.apparelhub.ai` (the `install.sh` does this automatically when invoked with the env var set; the install.sh persists both `APPARELHUB_API_KEY` and `APPARELHUB_API_BASE` to `~/.apparelhub-skills/.env` so subsequent shells pick it up). The `ah_check` output's "target …" line tells you which environment a given call is going against — if it says prod but you expected dev (or vice versa), the env var is the lever.
+By default all packaged scripts (`ah_check`, `ah_curl`, `ah_poll_mockup`) target the **production** Agent API at `https://api.apparelhub.ai`. Internal contributors and Tony's dev testing can target the dev stack by exporting `APPARELHUB_API_BASE=https://api.dev.apparelhub.ai`. The `install.sh` does this automatically when invoked with the env var set, persisting both `APPARELHUB_API_KEY` and `APPARELHUB_API_BASE` to `~/.apparelhub-skills/.env` so subsequent shells pick it up. The `ah_check` output's "target ..." line tells you which environment a given call is going against. If it says prod but you expected dev (or vice versa), the env var is the lever.
 
 **Do not echo the key yourself.** `echo "${APPARELHUB_API_KEY:?...}"` contains shell expansion (`${...}`) and will prompt on every invocation regardless of allowlist. `ah_check` is the prompt-free equivalent that also validates against the platform.
 
-(`ah_curl` itself also exits 2 on a missing key — so even if you skip `ah_check`, your first real API call surfaces the same error. The advantage of `ah_check` is catching it BEFORE you've started a multi-step workflow.)
+(`ah_curl` itself also exits 2 on a missing key, so even if you skip `ah_check`, your first real API call surfaces the same error. The advantage of `ah_check` is catching it BEFORE you've started a multi-step workflow.)
 
 ### Other packaged helpers (use these instead of inline bash)
 
-The skill ships a small set of additional scripts that exist for the same reason `ah_curl` does — they keep the agent's visible command line expansion-free and single-target so Claude Code's safety checks don't fire on every call. Always invoke them by name or full path, NEVER reproduce their logic inline.
+The skill ships a small set of additional scripts that exist for the same reason `ah_curl` does: they keep the agent's visible command line expansion-free and single-target so Claude Code's safety checks don't fire on every call. Always invoke them by name or full path, NEVER reproduce their logic inline.
 
 | Script | Replaces | When to invoke |
 |---|---|---|
-| `ah_poll_mockup` | A `for`/`while` loop polling `/merchandise/product/preview/<provider>/job/<job>` with `status=...; if "$s" = ...` checks | Phase 3 — after `POST /merchandise/product/preview` returns a `job_uuid`. Polls until the job is completed AND at least one preview row has `preview_url` populated, in ONE call. |
-| `ah_classify_previews` | A `python3 -c "import json; ..."` heredoc parsing the preview rows by color + angle | Phase 4.0 — after `ah_poll_mockup` succeeds. Classifies all preview rows AND (with `--recommend`) writes a JSON file with the best `display_image` + a curated `gallery_images` list ready to paste into the product create body. |
+| `ah_poll_mockup` | A `for`/`while` loop polling `/merchandise/product/preview/<provider>/job/<job>` with `status=...; if "$s" = ...` checks | Phase 3, after `POST /merchandise/product/preview` returns a `job_uuid`. Polls until the job is completed AND at least one preview row has `preview_url` populated, in ONE call. |
+| `ah_classify_previews` | A `python3 -c "import json; ..."` heredoc parsing the preview rows by color + angle | Phase 4.0, after `ah_poll_mockup` succeeds. Classifies all preview rows AND (with `--recommend`) writes a JSON file with the best `display_image` + a curated `gallery_images` list ready to paste into the product create body. |
 | `ah_pick_provider_url` | A `jq` filter walking the previews array for a specific color+angle | Anywhere you need ONE specific mockup URL (e.g., "download the black front mockup to verify visually before product creation"). |
-| `ah_pick_dimensions` | Inline math + the agent eyeballing the 80-90% rule | Phase 3 — after Phase 2 produces the cropped transparent design. Computes correct `(width, height, left, top)` from the design's actual aspect ratio + the garment's print area + a placement style. v1.10 default reserves 13% of area_height for collar breathing room on chest_fill (~0.8" on BC 3001 front; tunable with `--collar-padding-pct`). Without it the agent routinely produces too-small chest prints OR designs that touch the collar seam. |
-| `make_transparent.py` | Inline Pillow `python3 -c "..."` snippets | Phase 2 — local transparency processing (see `references/design-rules.md`). v1.8: rejects non-#00FF00 backgrounds by default (catches AI ignoring the prompt) and auto-crops to the design's bounding box. |
+| `ah_pick_dimensions` | Inline math + the agent eyeballing the 80-90% rule | Phase 3, after Phase 2 produces the cropped transparent design. Computes correct `(width, height, left, top)` from the design's actual aspect ratio + the garment's print area + a placement style. v1.10 default reserves 13% of area_height for collar breathing room on chest_fill (~0.8" on BC 3001 front; tunable with `--collar-padding-pct`). Without it the agent routinely produces too-small chest prints OR designs that touch the collar seam. |
+| `make_transparent.py` | Inline Pillow `python3 -c "..."` snippets | Phase 2, local transparency processing (see `references/design-rules.md`). v1.8: rejects non-#00FF00 backgrounds by default (catches AI ignoring the prompt) and auto-crops to the design's bounding box. |
 
 All four (plus `ah_curl` and `ah_check`) live in `scripts/` and are matched by the patterns in `settings.recommended.json`. The pipeline reference (`references/product-creation-pipeline.md`) and the end-to-end examples in `examples/` show concrete invocations.
 
-**General rule:** if you find yourself writing more than ONE shell line for a workflow step — a `for` loop, a `&&`-chained pair of commands, a `python3 -c` heredoc — stop and check whether there's a packaged script for it. Inline multi-line bash WILL trip the simple_expansion or multi-redirect checks regardless of how broad the allowlist is.
+**General rule:** if you find yourself writing more than ONE shell line for a workflow step (a `for` loop, a `&&`-chained pair of commands, a `python3 -c` heredoc) stop and check whether there's a packaged script for it. Inline multi-line bash WILL trip the simple_expansion or multi-redirect checks regardless of how broad the allowlist is.
 
 ### Spec lookup
 
-The canonical OpenAPI spec lives at `https://api.apparelhub.ai/agents/v1/openapi.json` — fetch it the same way as any other GET:
+The canonical OpenAPI spec lives at `https://api.apparelhub.ai/agents/v1/openapi.json`. Fetch it the same way as any other GET:
 
 ```bash
 ah_curl GET /agents/v1/openapi.json
@@ -136,37 +136,37 @@ The agent IS the orchestrator. Don't delegate state to the shell. This applies t
 
 Going from "user wants a saguaro tee" to "product is live on their Shopify store" takes 7 phases. Execute IN ORDER:
 
-1. **Generate the design image** — POST `/images/generate` with a prompt
-2. **LOCAL transparency processing** (your compute, NOT an API call) — for standard apparel only; SKIP for all-over print
-3. **Generate the mockup** — POST `/merchandise/product/preview`
+1. **Generate the design image.** POST `/images/generate` with a prompt
+2. **LOCAL transparency processing** (your compute, NOT an API call). For standard apparel only; SKIP for all-over print
+3. **Generate the mockup.** POST `/merchandise/product/preview`
 4. **Pick `display_image` + build `gallery_images` from preview rows**
-5. **Create the product** — POST `/product/create`
+5. **Create the product.** POST `/product/create`
 6. **Add variants** (one at a time, no batch endpoint)
-7. **Associate with store + sync to fulfillment + sync to sales channels** — default to DRAFT, not live
+7. **Associate with store + sync to fulfillment + sync to sales channels.** Default to DRAFT, not live
 
 **Full pipeline detail (every curl, every field, every gotcha) lives in `references/product-creation-pipeline.md`.** Read it before executing any phase you haven't done in this session.
 
 **The four field-name gotchas that silently break products** are documented there and worth memorizing:
 - Phase 3 preview endpoint uses `merchandise_provider_uuid` + `provider_product_ref_id`
 - Phase 5 create endpoint uses `provider_uuid` + `product_ref_id`
-- Same data, FLIPPED names — don't copy field names between phases
+- Same data, FLIPPED names. Don't copy field names between phases
 - Use `price`, not `retail_price`
 
 ---
 
-## 3. Decision tree — which reference file to load
+## 3. Decision tree: which reference file to load
 
 Before executing a workflow, scan this tree. Loading the right reference up front saves you from shipping a broken product.
 
 | If the task involves… | Read FIRST |
 |---|---|
-| Generating ANY design image | `references/design-rules.md` — AI prompt anti-patterns, transparency, vision-verification of text |
-| **Editing / iterating on an existing design** (user says "make the cat smug", "redo this in landscape", "use this as a starting point") | `references/design-rules.md` section 5b — `POST /images/generate` doubles as the img2img endpoint via `source_image_uuid` or multipart `images=@...`. Only Nano Banana and OpenAI support edit; Replicate-backed sources 422. |
+| Generating ANY design image | `references/design-rules.md` covers AI prompt anti-patterns, transparency, vision-verification of text |
+| **Editing / iterating on an existing design** (user says "make the cat smug", "redo this in landscape", "use this as a starting point") | `references/design-rules.md` section 5b explains how `POST /images/generate` doubles as the img2img endpoint via `source_image_uuid` or multipart `images=@...`. Only Nano Banana and OpenAI support edit; Replicate-backed sources 422. |
 | Standard apparel (tees, hoodies, tanks, sweatshirts) | `references/product-creation-pipeline.md` |
-| **Embroidered apparel** (Champion Anorak, polos, embroidered hats, jackets) | `references/embroidery.md` — the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from Printful. |
-| All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` — edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
+| **Embroidered apparel** (Champion Anorak, polos, embroidered hats, jackets) | `references/embroidery.md` covers the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from Printful. |
+| All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
 | Variant IDs, pricing, color limit, BC 3001 vs Comfort Colors trade-off | `references/garment-catalog.md` |
-| Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` — INCLUDES the payment-authority rule (sales channel wins for storefront orders) |
+| Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and sync it"), the `examples/` directory has working walkthroughs you can adapt:
@@ -190,14 +190,14 @@ Tell the merchant:
 > "I've synced as drafts so you can review on your storefront before going live. To publish, flip the listing in your channel admin or re-run sync with `?listing_state=active`."
 
 ### 4b. Verify the design before creating the product
-**Always** visually inspect the design after Phase 1 AND the mockup after Phase 3. Never ship a broken design or mockup downstream — manufacturing follows the mockup.
+**Always** visually inspect the design after Phase 1 AND the mockup after Phase 3. Never ship a broken design or mockup downstream because manufacturing follows the mockup.
 
 Specifically: if the design contains TEXT, verify spelling with vision tools BEFORE generating the mockup. AI image models routinely misspell.
 
 ### 4c. Respect pricing floors
 The merchant loses money on negative-margin products. Never go below the recommended retail prices in `references/garment-catalog.md` without the user explicitly accepting the math.
 
-### 4d. Color discipline — max 4 colors per design
+### 4d. Color discipline: max 4 colors per design
 More than 4 color variants creates SKU sprawl that hurts conversion. Pick the 4 best colors for the design and stop.
 
 ### 4e. Embroidery is stitched, not printed

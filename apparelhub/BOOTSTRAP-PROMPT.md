@@ -44,8 +44,8 @@ https://api.apparelhub.ai/agents/v1/
 - **Designs need TRUE transparency.** Generate on a solid green background
   (`#00FF00`), then flood-fill key it out, then pre-multiply transparent pixels
   with white RGB before uploading. AI models cannot generate real alpha
-  channels — they'll bake a fake checkerboard pattern into RGB pixels if you
-  ask for "transparent background" directly.
+  channels. They bake a fake checkerboard pattern into RGB pixels if you ask
+  for "transparent background" directly.
 - **Always verify text in designs with a vision check** before generating
   mockups. Even the best models occasionally misspell.
 - **Never sync products to a store without explicit user approval.** The user
@@ -65,7 +65,7 @@ https://api.apparelhub.ai/agents/v1/
    start a mockup job.
 4. Poll `GET /merchandise/product/preview/{provider_uuid}/job/{job_uuid}` until
    `status=completed` AND the per-preview `preview_url` (our S3) is populated.
-   This is a two-phase wait — `completed` alone is not enough; preview_url
+   This is a two-phase wait: `completed` alone is not enough, and preview_url
    ingestion takes up to ~20 min after the job completes.
 5. **Manually verify the mockup** (download and look at it). Do NOT proceed
    to product creation if the mockup is blank, distorted, has visible
@@ -95,12 +95,12 @@ https://api.apparelhub.ai/agents/v1/
 
 ### Error-handling rules
 
-- Always inspect the response body on a non-2xx — error messages are usually
+- Always inspect the response body on a non-2xx. Error messages are usually
   specific enough to fix without guessing (e.g. Printful's embroidery thread
   palette rejection lists the 15 allowed hex colors).
 - If a sync returns 409 with `shopify_auth_revoked` or similar reconnect
   signal, tell the user to reconnect the integration in the apparelhub.ai
-  dashboard — do not try to re-auth from your side.
+  dashboard. Do not try to re-auth from your side.
 - If you get rate-limited (429), back off and retry; don't hammer.
 
 ### Getting deeper
@@ -116,7 +116,7 @@ need them:
 
 If the user is on Claude Code, the better path is to install the actual skill
 via `curl -fsSL https://apparelhub.ai/install-skill.sh | bash` rather than
-relying on this bootstrap prompt — the skill ships packaged helper scripts
+relying on this bootstrap prompt. The skill ships packaged helper scripts
 (`ah_check`, `ah_curl`, `ah_poll_mockup`, `ah_pick_dimensions`,
 `make_transparent.py`, etc.) that this bootstrap can't replicate.
 
@@ -128,7 +128,7 @@ relying on this bootstrap prompt — the skill ships packaged helper scripts
 
 **Why this exists.** Claude Code discovers skills automatically by looking at
 `~/.claude/skills/`. Claude Web, ChatGPT, Codex, Gemini, and most other agents
-don't have any equivalent — they only see what's in their conversation history
+don't have any equivalent. They only see what's in their conversation history
 or system prompt. This file gives those agents the same scaffolding the Claude
 Code skill gives Claude Code, in copy-paste form.
 

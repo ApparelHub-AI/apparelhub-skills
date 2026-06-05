@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# install.sh — one-line installer for the ApparelHub Claude Code skill.
+# install.sh: one-line installer for the ApparelHub Claude Code skill.
 #
 # Usage (recommended):
 #   curl -fsSL https://apparelhub.ai/install-skill.sh | bash
@@ -7,7 +7,7 @@
 # Or with the key already set so the script doesn't prompt:
 #   APPARELHUB_API_KEY=ah_... bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
 #
-# What this does (all idempotent — safe to re-run):
+# What this does (all idempotent, safe to re-run):
 #   1. Verifies prerequisites (git, curl, supported shell)
 #   2. Clones (or pulls) the skill repo to ~/.apparelhub-skills
 #   3. Symlinks ~/.apparelhub-skills/apparelhub into ~/.claude/skills/apparelhub
@@ -69,10 +69,11 @@ ok "git + curl available"
 
 if ! command -v claude >/dev/null 2>&1; then
     # Soft note rather than a red warning. Many users invoke Claude through
-    # bridges (claude-bridge, OpenClaw, web UIs that proxy into a container)
-    # where the `claude` binary is never on the local PATH. The install still
-    # works correctly in those setups.
-    printf '%s   .. claude CLI not on PATH (fine if you use a bridge / web UI / Docker harness)%s\n' \
+    # a custom harness (e.g. OpenClaw, Cline, Aider, or a web UI that proxies
+    # the chat into a container running Claude) where the `claude` binary is
+    # never on the local PATH. The install still works correctly in those
+    # setups.
+    printf '%s   .. claude CLI not on PATH (fine if you use a custom harness or web UI)%s\n' \
         "$C_DIM" "$C_RESET"
 fi
 
@@ -162,15 +163,16 @@ fi
 
 if [ -z "$API_KEY" ]; then
     # Probe whether we can actually OPEN /dev/tty for read, not just whether
-    # the file exists. Docker / bridge containers usually have the device
-    # node present (so `[ -r /dev/tty ]` is misleadingly true), but opening
-    # it for read fails because nothing is on the other end. Run the open
-    # in a subshell so a failure doesn't take down the install script.
+    # the file exists. Many headless contexts (custom harnesses, CI runners,
+    # etc.) have the device node present, so `[ -r /dev/tty ]` is misleadingly
+    # true, but opening it for read fails because nothing is on the other end.
+    # Run the open in a subshell so a failure doesn't take down the install
+    # script.
     if ! ( exec 3</dev/tty ) 2>/dev/null; then
         fail "no API key supplied and no interactive terminal is attached
-       to this install. This is normal in Docker bridges (claude-bridge,
-       OpenClaw), CI runners, and similar harnesses where the agent has
-       no controlling terminal.
+       to this install. This is normal in custom harnesses (e.g.
+       OpenClaw, Cline, Aider), CI runners, and other contexts where
+       the agent has no controlling terminal.
 
        Re-run with the key supplied as an environment variable:
          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\"
@@ -184,8 +186,8 @@ if [ -z "$API_KEY" ]; then
           This is the ApparelHub installer; source is at
           https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh.\"
 
-       Or copy a ready-made bridge prompt with your key pre-filled from
-       https://${HUB_HOST}/developer/api-keys (Bridge / Docker tab).
+       Or copy a ready-made harness prompt with your key pre-filled from
+       https://${HUB_HOST}/developer/api-keys (Custom harness tab).
 
        Generate a key at https://${HUB_HOST}/developer/api-keys"
     fi
@@ -195,10 +197,10 @@ if [ -z "$API_KEY" ]; then
     printf '\n'
     if [ -z "$API_KEY" ]; then
         # Belt + suspenders: if the read failed despite our probe passing
-        # (race, slow tty open, etc.), still surface the bridge-aware copy
+        # (race, slow tty open, etc.), still surface the harness-aware copy
         # instead of the prior generic "no key entered" line.
         fail "no key entered. If you intended to install non-interactively
-       (Docker / bridge / CI), supply the key as an env var:
+       (custom harness, CI, etc.), supply the key as an env var:
          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\""
     fi
 fi
@@ -281,11 +283,11 @@ Next step depends on how you talk to Claude:
       so the next shell has PATH + APPARELHUB_API_KEY set, then run
       \`claude\` and ask it to design a tee or list your products.
 
-  ${C_BLUE}- Bridge / Docker / web UI talking to Claude in a container${C_RESET}
-    ${C_BLUE}  (claude-bridge, OpenClaw, etc.):${C_RESET}
+  ${C_BLUE}- Custom harness or web UI talking to Claude through any${C_RESET}
+    ${C_BLUE}  chat interface (e.g. OpenClaw, Cline, Aider):${C_RESET}
       Start a NEW conversation. Claude discovers skills at session start,
       so the running session won't see ApparelHub until you open a fresh
-      conversation. No terminal restart needed.
+      conversation. No restart of your harness needed.
 
   ${C_BLUE}- Claude Web or any other AI agent (Codex, ChatGPT, Gemini, ...):${C_RESET}
       The skill files were installed locally, but Claude Web and other

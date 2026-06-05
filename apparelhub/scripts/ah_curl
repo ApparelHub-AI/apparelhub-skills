@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ah_curl — agent-API curl wrapper.
+# ah_curl: agent-API curl wrapper.
 #
 # Reads APPARELHUB_API_KEY from the environment so the AGENT's command line
 # contains NO shell expansion ($VAR / ${VAR} / $(...)). Claude Code's
@@ -31,13 +31,13 @@
 #       -o /tmp/out.bin       save response to file (e.g. downloading mockups)
 #
 # Authoritative env:
-#   APPARELHUB_API_KEY   — required. Generate at apparelhub.ai/developer/api-keys
-#   APPARELHUB_API_BASE  — optional. Defaults to https://api.apparelhub.ai. Set
-#                          to https://api.dev.apparelhub.ai to target dev.
+#   APPARELHUB_API_KEY   (required) Generate at apparelhub.ai/developer/api-keys
+#   APPARELHUB_API_BASE  (optional) Defaults to https://api.apparelhub.ai. Set
+#                        to https://api.dev.apparelhub.ai to target dev.
 #
 # Exit codes:
 #   0   curl succeeded (HTTP code printed inside the body; this wrapper does
-#       not interpret status — caller parses the response as needed)
+#       not interpret status, so caller parses the response as needed)
 #   2   APPARELHUB_API_KEY not set, or missing METHOD/PATH_OR_URL arg
 #   *   curl's own exit code on transport failure
 
@@ -70,7 +70,7 @@ esac
 HEADERS=(-H "x-api-key: $APPARELHUB_API_KEY")
 
 # If caller is doing a multipart upload (-F / --form), don't preset
-# Content-Type — let curl auto-set it with the right boundary. Otherwise
+# Content-Type; let curl auto-set it with the right boundary. Otherwise
 # default to JSON, which is what 95%+ of the agent API calls expect.
 HAS_F=0
 for arg in "$@"; do

@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# ah_check — verify APPARELHUB_API_KEY is set AND valid against the live API.
+# ah_check: verify APPARELHUB_API_KEY is set AND valid against the live API.
 #
 # Run this as the FIRST call of any session that uses the apparelhub skill.
 # Distinguishes three cases:
 #   - Not set:        exit 2 with instructions to generate one
-#   - Set but bad:    exit 3 (401/403 from the platform — revoked or wrong env)
+#   - Set but bad:    exit 3 (401/403 from the platform: revoked or wrong env)
 #   - Set and works:  exit 0 with a masked-key confirmation line
 #
-# The agent's visible command line is just `ah_check` — no $VAR expansion, so
+# The agent's visible command line is just `ah_check`. No $VAR expansion, so
 # Claude Code's simple_expansion check doesn't fire and the allowlist matches
 # cleanly.
 
@@ -48,7 +48,7 @@ case "$HTTP_CODE" in
         ;;
     401|403)
         echo "ah_check: key set but rejected by the platform (HTTP $HTTP_CODE)" >&2
-        echo "         Target was $API_BASE — make sure the key was generated for THIS environment." >&2
+        echo "         Target was $API_BASE; make sure the key was generated for THIS environment." >&2
         echo "         Verify at https://${HUB_HOST}/developer/api-keys" >&2
         exit 3
         ;;

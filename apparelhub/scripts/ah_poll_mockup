@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-ah_poll_mockup — poll a Printful/Printify mockup job until it's completed
+ah_poll_mockup: poll a Printful/Printify mockup job until it's completed
 AND at least one preview row has a populated preview_url.
 
 This script collapses what used to be TWO polling phases (status=completed,
 then preview_url ingestion) into ONE call against the job-status endpoint.
-The job endpoint carries both signals — there is NO separate "preview-job
+The job endpoint carries both signals; there is NO separate "preview-job
 listing" endpoint to call; that surface returned 0 rows in the field even
 after the job-status endpoint reported preview_url populated.
 
@@ -18,9 +18,9 @@ Usage:
                    [--max-transient-errors N]      default 5
 
 Exit codes:
-    0 — job completed AND >= min-ready previews have preview_url
-    1 — timeout, job failed, auth error, or too many consecutive transient errors
-    2 — APPARELHUB_API_KEY not set, or bad CLI args
+    0: job completed AND >= min-ready previews have preview_url
+    1: timeout, job failed, auth error, or too many consecutive transient errors
+    2: APPARELHUB_API_KEY not set, or bad CLI args
 
 Why this exists: inline `for` loops with $(...) command substitution trip
 Claude Code's simple_expansion check on every iteration regardless of
@@ -30,8 +30,8 @@ command line expansion-free.
 Transient error handling (v1.11+): the job-status endpoint occasionally
 returns HTTP 5xx (most commonly 504 from API Gateway when our Lambda is
 mid-S3-ingestion or Printful's upstream is slow). These are EXPECTED during
-polling — the job is still progressing in the background. The script treats
-the following as transient and keeps polling:
+polling because the job is still progressing in the background. The script
+treats the following as transient and keeps polling:
   - HTTP 502 (Bad Gateway)
   - HTTP 503 (Service Unavailable)
   - HTTP 504 (Gateway Timeout)
@@ -124,7 +124,7 @@ def main() -> int:
     last_status: str | None = None
     transient_errors_in_a_row = 0
 
-    # HTTP status codes that indicate a transient upstream/gateway issue —
+    # HTTP status codes that indicate a transient upstream/gateway issue:
     # the job is still progressing on the platform side, just retry.
     TRANSIENT_HTTP_CODES = {502, 503, 504, 429}
 
@@ -157,14 +157,14 @@ def main() -> int:
                 )
                 time.sleep(args.interval)
                 continue
-            # Non-transient HTTP error — bail.
+            # Non-transient HTTP error: bail.
             sys.stderr.write(
                 f"ah_poll_mockup: HTTP {e.code} from job endpoint "
                 f"(provider={args.provider_uuid}, job={args.job_uuid})\n"
             )
             if e.code in (401, 403):
                 sys.stderr.write(
-                    f"                 Key rejected against {API_BASE} — make sure the key matches THIS env.\n"
+                    f"                 Key rejected against {API_BASE}, so make sure the key matches THIS env.\n"
                     f"                 Verify at https://{HUB_HOST}/developer/api-keys\n"
                 )
             return 1
@@ -196,7 +196,7 @@ def main() -> int:
             sys.stderr.write("ah_poll_mockup: non-JSON response from job endpoint\n")
             return 1
 
-        # Successful response — reset the transient counter
+        # Successful response: reset the transient counter
         transient_errors_in_a_row = 0
         last_payload = payload
         # Persist on every poll so the agent can inspect partial state if
@@ -223,7 +223,7 @@ def main() -> int:
 
         if status == "completed" and ready >= args.min_ready:
             print(
-                f"ah_poll_mockup: done in {elapsed}s — "
+                f"ah_poll_mockup: done in {elapsed}s, "
                 f"{ready}/{total} previews ready, response saved to {args.out}",
                 flush=True,
             )
