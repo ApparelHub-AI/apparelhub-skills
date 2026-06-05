@@ -69,10 +69,14 @@ ah_check
 ```
 
 Exit codes:
-- **0** — key is set and valid. Output looks like `ah_check: ok (key ah_xxxx...yyyy)`. Proceed.
+- **0** — key is set and valid. Output looks like `ah_check: ok (key xxxxxxx...yyyy, target https://api.apparelhub.ai)`. Proceed.
 - **2** — key is not set in the environment. Tell the user:
-  > You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=ah_xxx...`
-- **3** — key is set but rejected (401/403). Likely revoked, expired, or from the wrong environment. Tell the user to check `https://apparelhub.ai/developer/api-keys`.
+  > You need an ApparelHub API key. Generate one at https://apparelhub.ai/developer/api-keys (requires Professional or Enterprise tier). Then run: `export APPARELHUB_API_KEY=<your-key>`
+- **3** — key is set but rejected (401/403). Likely revoked, expired, or from the wrong environment. Tell the user to check `https://apparelhub.ai/developer/api-keys`. The error message includes the target URL — make sure the key was generated for the same environment (prod keys do not work against dev and vice versa).
+
+### Environment targeting
+
+By default all packaged scripts (`ah_check`, `ah_curl`, `ah_poll_mockup`) target the **production** Agent API at `https://api.apparelhub.ai`. Internal contributors / Tony's dev testing can target the dev stack by exporting `APPARELHUB_API_BASE=https://api.dev.apparelhub.ai` (the `install.sh` does this automatically when invoked with the env var set; the install.sh persists both `APPARELHUB_API_KEY` and `APPARELHUB_API_BASE` to `~/.apparelhub-skills/.env` so subsequent shells pick it up). The `ah_check` output's "target …" line tells you which environment a given call is going against — if it says prod but you expected dev (or vice versa), the env var is the lever.
 
 **Do not echo the key yourself.** `echo "${APPARELHUB_API_KEY:?...}"` contains shell expansion (`${...}`) and will prompt on every invocation regardless of allowlist. `ah_check` is the prompt-free equivalent that also validates against the platform.
 

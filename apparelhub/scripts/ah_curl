@@ -21,7 +21,7 @@
 #   - METHOD is GET / POST / PATCH / PUT / DELETE (uppercase, no -X prefix).
 #   - PATH_OR_URL is either:
 #       * an absolute path starting with /  (e.g. /agents/v1/store)
-#         -> prefixed with https://api.apparelhub.ai
+#         -> prefixed with $APPARELHUB_API_BASE (default https://api.apparelhub.ai)
 #       * a full URL (https://... or http://...) -> used as-is
 #   - Any remaining args are passed through to curl unchanged. Useful flags:
 #       -d '{"k":"v"}'        JSON body (default Content-Type: application/json)
@@ -31,7 +31,9 @@
 #       -o /tmp/out.bin       save response to file (e.g. downloading mockups)
 #
 # Authoritative env:
-#   APPARELHUB_API_KEY  — required. Generate at apparelhub.ai/developer/api-keys
+#   APPARELHUB_API_KEY   — required. Generate at apparelhub.ai/developer/api-keys
+#   APPARELHUB_API_BASE  — optional. Defaults to https://api.apparelhub.ai. Set
+#                          to https://api.dev.apparelhub.ai to target dev.
 #
 # Exit codes:
 #   0   curl succeeded (HTTP code printed inside the body; this wrapper does
@@ -41,10 +43,14 @@
 
 set -euo pipefail
 
+API_BASE="${APPARELHUB_API_BASE:-https://api.apparelhub.ai}"
+API_BASE="${API_BASE%/}"
+HUB_HOST=$(printf '%s' "$API_BASE" | sed -e 's,^https\?://,,' -e 's,^api\.,,' -e 's,/.*$,,')
+
 if [ -z "${APPARELHUB_API_KEY:-}" ]; then
     echo "ah_curl: APPARELHUB_API_KEY not set in environment" >&2
-    echo "         Generate one at https://apparelhub.ai/developer/api-keys" >&2
-    echo "         Then: export APPARELHUB_API_KEY=ah_xxx..." >&2
+    echo "         Generate one at https://${HUB_HOST}/developer/api-keys" >&2
+    echo "         Then: export APPARELHUB_API_KEY=<your-key>" >&2
     exit 2
 fi
 
@@ -56,8 +62,8 @@ shift
 # Resolve to a full URL
 case "$PATH_OR_URL" in
     https://*|http://*) URL=$PATH_OR_URL ;;
-    /*)                 URL="https://api.apparelhub.ai$PATH_OR_URL" ;;
-    *)                  URL="https://api.apparelhub.ai/$PATH_OR_URL" ;;
+    /*)                 URL="${API_BASE}${PATH_OR_URL}" ;;
+    *)                  URL="${API_BASE}/${PATH_OR_URL}" ;;
 esac
 
 # Build the headers array

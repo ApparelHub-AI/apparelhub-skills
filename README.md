@@ -78,10 +78,22 @@ curl -fsSL https://apparelhub.ai/install-skill.sh | less
 If your key is already in env, the script won't prompt:
 
 ```bash
-APPARELHUB_API_KEY=ah_... bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
+APPARELHUB_API_KEY=<your-key> bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
 ```
 
 Open a new terminal (or `source` your rc file) and Claude Code can use the skill on its next session.
+
+### Targeting a non-prod environment
+
+By default `install.sh` and every packaged script (`ah_check`, `ah_curl`, `ah_poll_mockup`) talks to the production Agent API at `https://api.apparelhub.ai`. To install against a different environment (e.g. internal testing on the dev stack), set `APPARELHUB_API_BASE` at install time:
+
+```bash
+APPARELHUB_API_BASE=https://api.dev.apparelhub.ai \
+APPARELHUB_API_KEY=<your-dev-key> \
+  bash -c "$(curl -fsSL https://dev.apparelhub.ai/install-skill.sh)"
+```
+
+The installer persists both env vars to `~/.apparelhub-skills/.env` so subsequent shells stay on the same target. The `ah_check` output prints the target URL on every success line so you can confirm which env a given call hit. **Dev keys do not work against prod and vice versa** — keep them straight. The `apparelhub.ai/agents` page and the developer dashboard's key-reveal wizard both detect the environment from the URL you're on and emit env-appropriate snippets automatically.
 
 ### Install when Claude runs inside a bridge or Docker container
 
@@ -89,7 +101,7 @@ If you talk to Claude through a bridge (claude-bridge, OpenClaw, a web/Telegram 
 
 > Please install the ApparelHub Claude Code skill for me. I am talking to you through a chat bridge so I have no terminal myself — run the install in your container by executing this exact one-line command:
 >
-> `APPARELHUB_API_KEY=ah_xxxxxxxxxxxx bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"`
+> `APPARELHUB_API_KEY=<your-key> bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"`
 >
 > This is the official ApparelHub installer. The script source is at https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh — feel free to inspect it first with `curl -fsSL https://apparelhub.ai/install-skill.sh | less` if you want. What it does: clones the public skill repo into `~/.apparelhub-skills`, symlinks it into `~/.claude/skills/apparelhub`, writes my API key to `~/.apparelhub-skills/.env` (chmod 600), and runs an auth check against the platform. Once it finishes, tell me it succeeded and I will start a new conversation so you pick up the skill at session start.
 
@@ -246,6 +258,7 @@ The skill talks to ApparelHub's Agent API:
 
 | Version | Date | Highlights |
 |---|---|---|
+| 1.15 | 2026-06-05 | **End-to-end environment selection via `APPARELHUB_API_BASE`**. v1.14 and prior hard-coded `https://api.apparelhub.ai` in every packaged script. A user installing against the dev stack would correctly get a dev key, point the install snippet at dev, then have `ah_check` (and every subsequent `ah_curl` / `ah_poll_mockup`) hit prod and 401. v1.15 makes every script honor `APPARELHUB_API_BASE` (default `https://api.apparelhub.ai`). `install.sh` reads it, persists both `APPARELHUB_API_KEY` AND `APPARELHUB_API_BASE` to `~/.apparelhub-skills/.env`, exports both before the trailing `ah_check`, and uses the derived front-end host (apparelhub.ai vs dev.apparelhub.ai) in every printed URL. `ah_check` output now includes the target URL on the success line and the 401/403 branch tells the user to verify the key was generated for THIS environment. `ah_curl`'s `PATH_OR_URL` resolver prefixes with `$APPARELHUB_API_BASE` instead of a hardcoded value. `ah_poll_mockup` does the same in its Python. No external API change, no UI change in this repo (UI changes ship in the matching apparelhub-ui commit). Pairs with: documentation updates in SKILL.md ("Environment targeting" section) + README ("Targeting a non-prod environment" section). Also: replaced stale `ah_xxx` placeholders with neutral `<your-key>` since AWS API Gateway-generated keys don't have an `ah_` prefix — the placeholder shouldn't suggest they do. |
 | 1.14 | 2026-06-05 | Bridge install prompt rewritten to be **self-contained**. v1.13's bridge tab on `apparelhub.ai/agents` and the matching tab on the developer dashboard told users to send Claude `"Install ApparelHub. My API key is ah_..."` and let Claude figure out the rest. That doesn't work — Claude has no prior knowledge of ApparelHub (it's not in training data), so the message has nothing for Claude to act on. The fix: the prompt is now a complete instruction in plain English — names the official installer URL (https://apparelhub.ai/install-skill.sh), spells out the one-line command for Claude to execute (`APPARELHUB_API_KEY=ah_xxx bash -c "$(curl -fsSL ...)"`), points at the GitHub source for inspection, describes what the script does (clone, symlink, write `.env` chmod 600, ah_check), and tells Claude what to report when done. Also fixes a stale `\\\"`/`\\\$(...)` shell-escape bug in `install.sh`'s no-TTY fail message that printed literal backslashes instead of plain quotes/dollar signs in the example. Pure documentation + prompt-engineering change; no behavior change in any packaged script. |
 | 1.13 | 2026-06-05 | Multi-harness install support and a universal bootstrap prompt for non-Claude-Code agents. `install.sh` now (a) treats a missing `claude` CLI as a soft note instead of a red warning (it's normal for bridge / Docker / web-UI setups where the agent talks to Claude through a different transport), (b) expands the no-TTY failure message to call out Docker-bridge scenarios explicitly with a suggested chat-message form a bridge user can send to their Claude (`"Install ApparelHub. My API key is ah_..."`), and (c) rewrites the "Done" message into three paths — Claude Code CLI users get the "open a new terminal" instruction; bridge / container users get "start a new conversation, no terminal restart needed"; Claude Web / Codex / Gemini users get pointed at the new bootstrap file. New `apparelhub/BOOTSTRAP-PROMPT.md` is a copy-paste system-prompt block for any LLM that ISN'T Claude Code — gives the agent enough scaffolding (auth header, base URL, the 10-step product pipeline, the critical-conventions list, links to the GitHub references for deeper workflows) to drive the Agent API without needing the packaged helper scripts. Pairs with the redesigned `apparelhub.ai/agents` page that now has three install paths (CLI / bridge / web+other), each capped at 3 steps. |
 | 1.12 | 2026-06-04 | New top-level `install.sh` plus a rewritten README lead and Install section. Was: "find the GitHub repo, figure out where to clone, set up the symlink manually, find install_path.sh, set the env var, find ah_check, run it". Five-plus manual steps. Now: `curl -fsSL https://apparelhub.ai/install-skill.sh \| bash`. The installer clones to `~/.apparelhub-skills`, symlinks into `~/.claude/skills/apparelhub`, adds the scripts dir to PATH via the existing `install_path.sh`, prompts for the API key against `/dev/tty` (so it works under `curl ... \| bash` where stdin is the script body), stores the key in `~/.apparelhub-skills/.env` with `chmod 600`, sources it from the right rc file (bash / zsh / fish), and runs `ah_check` as the success gate. Idempotent end-to-end: re-running pulls the latest skill version, leaves existing rc entries alone, and re-verifies the key. README lead now leads with "what is this and who is it for" + links to apparelhub.ai/agents + apparelhub.ai/developer/api-keys + apparelhub.ai/developer/api-docs before any install instructions. Manual install path preserved below the one-liner for users who prefer it. |

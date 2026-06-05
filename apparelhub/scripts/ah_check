@@ -13,10 +13,18 @@
 
 set -euo pipefail
 
+# Environment selection. Defaults to prod; set APPARELHUB_API_BASE to point
+# at a different environment (e.g. https://api.dev.apparelhub.ai for the
+# dev stack) without editing any scripts.
+API_BASE="${APPARELHUB_API_BASE:-https://api.apparelhub.ai}"
+# Strip any trailing slash so concatenation below is consistent.
+API_BASE="${API_BASE%/}"
+HUB_HOST=$(printf '%s' "$API_BASE" | sed -e 's,^https\?://,,' -e 's,^api\.,,' -e 's,/.*$,,')
+
 if [ -z "${APPARELHUB_API_KEY:-}" ]; then
     echo "ah_check: APPARELHUB_API_KEY not set in environment" >&2
-    echo "         Generate one at https://apparelhub.ai/developer/api-keys" >&2
-    echo "         Then: export APPARELHUB_API_KEY=ah_xxx..." >&2
+    echo "         Generate one at https://${HUB_HOST}/developer/api-keys" >&2
+    echo "         Then: export APPARELHUB_API_KEY=<your-key>" >&2
     exit 2
 fi
 
@@ -24,7 +32,7 @@ fi
 # and always returns at least the user's default store, so it's a reliable
 # round-trip probe.
 HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
-    "https://api.apparelhub.ai/agents/v1/store" \
+    "${API_BASE}/agents/v1/store" \
     -H "x-api-key: $APPARELHUB_API_KEY")
 
 case "$HTTP_CODE" in
@@ -35,22 +43,22 @@ case "$HTTP_CODE" in
         else
             MASKED="(set)"
         fi
-        echo "ah_check: ok (key $MASKED)"
+        echo "ah_check: ok (key $MASKED, target $API_BASE)"
         exit 0
         ;;
     401|403)
         echo "ah_check: key set but rejected by the platform (HTTP $HTTP_CODE)" >&2
-        echo "         The key may be revoked, expired, or from the wrong environment." >&2
-        echo "         Verify at https://apparelhub.ai/developer/api-keys" >&2
+        echo "         Target was $API_BASE — make sure the key was generated for THIS environment." >&2
+        echo "         Verify at https://${HUB_HOST}/developer/api-keys" >&2
         exit 3
         ;;
     000)
-        echo "ah_check: network failure reaching api.apparelhub.ai" >&2
+        echo "ah_check: network failure reaching $API_BASE" >&2
         echo "         Check connectivity and try again." >&2
         exit 3
         ;;
     *)
-        echo "ah_check: unexpected response (HTTP $HTTP_CODE) from api.apparelhub.ai" >&2
+        echo "ah_check: unexpected response (HTTP $HTTP_CODE) from $API_BASE" >&2
         echo "         The platform may be having issues. Try again in a minute." >&2
         exit 3
         ;;

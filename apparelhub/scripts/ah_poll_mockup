@@ -52,7 +52,19 @@ import time
 import urllib.error
 import urllib.request
 
-API_BASE = "https://api.apparelhub.ai"
+# Honor APPARELHUB_API_BASE for environment selection; default to prod. Strip
+# any trailing slash so concatenation below is consistent.
+API_BASE = os.environ.get("APPARELHUB_API_BASE", "https://api.apparelhub.ai").rstrip("/")
+
+
+def _hub_host_from_api_base(api_base: str) -> str:
+    """Derive the front-end host (e.g. apparelhub.ai or dev.apparelhub.ai)
+    from the API base URL by stripping scheme + leading 'api.'."""
+    host = api_base.split("://", 1)[-1].split("/", 1)[0]
+    return host[4:] if host.startswith("api.") else host
+
+
+HUB_HOST = _hub_host_from_api_base(API_BASE)
 
 
 def fetch_job(provider_uuid: str, job_uuid: str, api_key: str) -> dict:
@@ -101,8 +113,8 @@ def main() -> int:
     if not api_key:
         sys.stderr.write(
             "ah_poll_mockup: APPARELHUB_API_KEY not set in environment\n"
-            "                 Generate one at https://apparelhub.ai/developer/api-keys\n"
-            "                 Then: export APPARELHUB_API_KEY=ah_xxx...\n"
+            f"                 Generate one at https://{HUB_HOST}/developer/api-keys\n"
+            "                 Then: export APPARELHUB_API_KEY=<your-key>\n"
         )
         return 2
 
@@ -152,7 +164,8 @@ def main() -> int:
             )
             if e.code in (401, 403):
                 sys.stderr.write(
-                    "                 Key rejected — check apparelhub.ai/developer/api-keys\n"
+                    f"                 Key rejected against {API_BASE} — make sure the key matches THIS env.\n"
+                    f"                 Verify at https://{HUB_HOST}/developer/api-keys\n"
                 )
             return 1
         except urllib.error.URLError as e:

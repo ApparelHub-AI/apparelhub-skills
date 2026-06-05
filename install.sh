@@ -21,6 +21,16 @@
 
 set -euo pipefail
 
+# ---- environment selection -------------------------------------------------
+# Honor APPARELHUB_API_BASE for environment selection so the same installer
+# works against dev or prod. Default to prod; set
+#   APPARELHUB_API_BASE=https://api.dev.apparelhub.ai
+# to target the dev stack. The detected host is also used to derive the
+# front-end host (apparelhub.ai vs dev.apparelhub.ai) for any URLs we print.
+API_BASE="${APPARELHUB_API_BASE:-https://api.apparelhub.ai}"
+API_BASE="${API_BASE%/}"
+HUB_HOST=$(printf '%s' "$API_BASE" | sed -e 's,^https\?://,,' -e 's,^api\.,,' -e 's,/.*$,,')
+
 # ---- pretty output helpers --------------------------------------------------
 
 if [ -t 1 ]; then
@@ -163,23 +173,23 @@ if [ -z "$API_KEY" ]; then
        no controlling terminal.
 
        Re-run with the key supplied as an environment variable:
-         APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\"
+         APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\"
 
        If your Claude agent is doing the install for you, send it a
        SELF-CONTAINED chat message. Claude has no prior knowledge of
        ApparelHub, so the prompt must include the exact command. For
        example:
          \"Please run this exact command for me:
-          APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\"
+          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\"
           This is the ApparelHub installer; source is at
           https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh.\"
 
        Or copy a ready-made bridge prompt with your key pre-filled from
-       https://apparelhub.ai/developer/api-keys (Bridge / Docker tab).
+       https://${HUB_HOST}/developer/api-keys (Bridge / Docker tab).
 
-       Generate a key at https://apparelhub.ai/developer/api-keys"
+       Generate a key at https://${HUB_HOST}/developer/api-keys"
     fi
-    printf "\n   Generate a key at %shttps://apparelhub.ai/developer/api-keys%s\n" "$C_DIM" "$C_RESET"
+    printf "\n   Generate a key at %shttps://%s/developer/api-keys%s\n" "$C_DIM" "$HUB_HOST" "$C_RESET"
     printf "   Paste your ApparelHub API key (input hidden): "
     IFS= read -rs API_KEY </dev/tty || true
     printf '\n'
@@ -189,19 +199,33 @@ if [ -z "$API_KEY" ]; then
         # instead of the prior generic "no key entered" line.
         fail "no key entered. If you intended to install non-interactively
        (Docker / bridge / CI), supply the key as an env var:
-         APPARELHUB_API_KEY=ah_... bash -c \"\$(curl -fsSL https://apparelhub.ai/install-skill.sh)\""
+         APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\""
     fi
 fi
 
 # Write the .env (bash-compatible). Fish gets a parallel .env.fish below.
+# If a non-default APPARELHUB_API_BASE was supplied (e.g. dev install), persist
+# that too so subsequent shells + the packaged skill scripts (ah_check,
+# ah_curl, ah_poll_mockup) target the same env. The default is implicit; only
+# persist when the user explicitly chose a non-default base URL.
 umask 077
-printf 'export APPARELHUB_API_KEY=%s\n' "$API_KEY" > "$ENV_FILE"
+{
+    printf 'export APPARELHUB_API_KEY=%s\n' "$API_KEY"
+    if [ "$API_BASE" != "https://api.apparelhub.ai" ]; then
+        printf 'export APPARELHUB_API_BASE=%s\n' "$API_BASE"
+    fi
+} > "$ENV_FILE"
 chmod 600 "$ENV_FILE"
-ok "key saved to $ENV_FILE (chmod 600)"
+ok "key saved to $ENV_FILE (chmod 600, target $API_BASE)"
 
 if [ "$SHELL_NAME" = "fish" ]; then
     ENV_FISH="$REPO_DIR/.env.fish"
-    printf 'set -gx APPARELHUB_API_KEY %s\n' "$API_KEY" > "$ENV_FISH"
+    {
+        printf 'set -gx APPARELHUB_API_KEY %s\n' "$API_KEY"
+        if [ "$API_BASE" != "https://api.apparelhub.ai" ]; then
+            printf 'set -gx APPARELHUB_API_BASE %s\n' "$API_BASE"
+        fi
+    } > "$ENV_FISH"
     chmod 600 "$ENV_FISH"
     ok "fish-compatible env written to $ENV_FISH"
 fi
@@ -228,17 +252,20 @@ if [ -n "$RC_FILE" ]; then
     fi
 fi
 
-# Make the key live in THIS shell so ah_check below works.
+# Make the key live in THIS shell so ah_check below works. Pass
+# APPARELHUB_API_BASE through too so ah_check targets the right environment
+# (defaults to prod, but a dev install passes the dev base URL).
 export APPARELHUB_API_KEY="$API_KEY"
+export APPARELHUB_API_BASE="$API_BASE"
 
 # ---- verify with ah_check ---------------------------------------------------
 
-step "Verifying the key against the platform"
+step "Verifying the key against the platform ($API_BASE)"
 
 if "$SKILL_SRC/scripts/ah_check"; then
     ok "ah_check passed"
 else
-    fail "ah_check rejected the key. Verify it at https://apparelhub.ai/developer/api-keys"
+    fail "ah_check rejected the key. Verify it at https://${HUB_HOST}/developer/api-keys"
 fi
 
 # ---- done -------------------------------------------------------------------
