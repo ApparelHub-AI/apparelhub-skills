@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
 ah_pick_provider_url — extract one preview URL from a preview-job JSON
-blob by color + angle, with no shell variables on the agent's command line.
+blob by color + angle.
+
+Value-add: surgical extraction of a single URL (e.g. "black + front")
+from the dozens of preview rows a typical job produces. Local-only — no
+network call, no API key used.
 
 Usage:
     ah_pick_provider_url <preview_job_json_path> <color> <angle>

@@ -96,7 +96,7 @@ When in doubt, default to `Nano Banana` — it's the most consistent across cate
 
 ## 5b. Generating vs editing — `POST /images/generate` is BOTH endpoints
 
-`POST /agents/v1/images/generate` is overloaded. Same endpoint, same `ah_curl` invocation pattern, but the **request shape** determines whether you're doing text-to-image OR img2img editing.
+`POST /agents/v1/images/generate` is overloaded. Same endpoint, same auth, but the **request shape** determines whether you're doing text-to-image OR img2img editing.
 
 ### Three modes
 
@@ -137,10 +137,10 @@ If the user wants edit and you'd normally reach for Seedream for the text accura
 
 ```bash
 # Find the source image UUID in the user's gallery first.
-ah_curl GET /agents/v1/images/generated?limit=20&sort=newest
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?limit=20&sort=newest" -H "x-api-key: $APPARELHUB_API_KEY"
 # Pick the UUID of the design you want to edit. Substitute it literally below.
 
-ah_curl POST /agents/v1/images/generate -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "prompt": "Same Victorian etching of a cat, but with a deeply smug, self-satisfied expression. Whiskers held high. Faintly amused eyes. Keep all other composition elements identical (the moth, the gilt frame, the ornate background).",
   "source": "Nano Banana",
   "source_image_uuid": "abc-123-def-456",
@@ -154,7 +154,7 @@ Response shape is identical to text-to-image: `{"generated_image": {"uuid": "...
 
 ```bash
 # "Put the character from image A wearing the outfit from image B"
-ah_curl POST /agents/v1/images/generate -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "prompt": "The character from the first image, wearing the outfit from the second image, full body, clean white background.",
   "source": "Nano Banana",
   "source_image_uuid": "<character-uuid>",

@@ -18,8 +18,10 @@ If --recommend is passed, also writes a JSON file with:
       "rationale": "<one-line explanation>"
     }
 
-The agent reads that JSON and pastes the literal URLs into the product
-create body — no shell variables, no command substitution.
+Value-add: filename-slug parsing maps each preview row to a (color,
+angle) pair so the agent can pick the best display image and curate a
+gallery without hand-eyeballing dozens of preview URLs. Purely local —
+no network call, no API key used.
 
 Why filename parsing: provider_preview_ref_url comes back like
     https://files.cdn.printful.com/.../unisex-staple-t-shirt-black-front-abc.png

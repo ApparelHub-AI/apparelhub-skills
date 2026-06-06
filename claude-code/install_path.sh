@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install_path.sh — one-time: add the apparelhub scripts dir to your shell's
-# PATH so `ah_curl`, `ah_check`, and `make_transparent.py` can be invoked by
-# bare name.
+# PATH so `ah_check`, `ah_poll_mockup`, `make_transparent.py`, and the other
+# packaged helpers can be invoked by bare name.
 #
 # Idempotent. Safe to re-run — won't add a duplicate line.
 # Detects bash, zsh, and fish. Falls back to printing manual instructions
@@ -58,7 +58,7 @@ fi
 # user could rephrase the export line without us treating it as missing)
 if [ -f "$RC_FILE" ] && grep -qF "$MARKER" "$RC_FILE"; then
     echo "install_path.sh: PATH entry already present in $RC_FILE — no-op"
-    echo "If ah_curl still isn't found, restart your shell or run: source $RC_FILE"
+    echo "If ah_check still isn't found, restart your shell or run: source $RC_FILE"
     exit 0
 fi
 

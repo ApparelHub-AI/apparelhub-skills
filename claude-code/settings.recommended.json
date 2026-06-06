@@ -1,18 +1,9 @@
 {
+  "_comment": "Optional permission allowlist for Claude Code users. Merge into ~/.claude/settings.json. These patterns drop a few prompts on routine calls; they are NOT designed to make every secret-use prompt go away. The first time Claude Code expands $APPARELHUB_API_KEY, it WILL prompt — that's correct behavior; approve it in context. See ../SECURITY.md.",
   "permissions": {
     "allow": [
       "Bash(ah_check)",
       "Bash(*apparelhub/scripts/ah_check)",
-      "Bash(ah_curl GET *)",
-      "Bash(ah_curl POST *)",
-      "Bash(ah_curl PATCH *)",
-      "Bash(ah_curl PUT *)",
-      "Bash(ah_curl DELETE *)",
-      "Bash(*apparelhub/scripts/ah_curl GET *)",
-      "Bash(*apparelhub/scripts/ah_curl POST *)",
-      "Bash(*apparelhub/scripts/ah_curl PATCH *)",
-      "Bash(*apparelhub/scripts/ah_curl PUT *)",
-      "Bash(*apparelhub/scripts/ah_curl DELETE *)",
       "Bash(ah_poll_mockup *)",
       "Bash(*apparelhub/scripts/ah_poll_mockup *)",
       "Bash(ah_classify_previews *)",
@@ -22,6 +13,7 @@
       "Bash(ah_pick_dimensions *)",
       "Bash(*apparelhub/scripts/ah_pick_dimensions *)",
       "Bash(curl -sS https://api.apparelhub.ai/agents/v1/*)",
+      "Bash(curl -sS -X GET https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X POST https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X PATCH https://api.apparelhub.ai/agents/v1/*)",
       "Bash(curl -sS -X PUT https://api.apparelhub.ai/agents/v1/*)",

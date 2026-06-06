@@ -1,35 +1,49 @@
 #!/usr/bin/env bash
-# install.sh: one-line installer for the ApparelHub Claude Code skill.
+# install.sh — Claude Code installer for the ApparelHub skill.
 #
 # Usage (recommended):
 #   curl -fsSL https://apparelhub.ai/install-skill.sh | bash
 #
-# Or with the key already set so the script doesn't prompt:
-#   APPARELHUB_API_KEY=ah_... bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
+# With the key already set so the installer doesn't prompt:
+#   APPARELHUB_API_KEY=<your-key> bash -c "$(curl -fsSL https://apparelhub.ai/install-skill.sh)"
+#
+# Persist the key to ~/.apparelhub-skills/.env (v1.x default — NOT recommended;
+# manage the key via your host's secret manager instead):
+#   curl -fsSL https://apparelhub.ai/install-skill.sh | bash -s -- --persist
 #
 # What this does (all idempotent, safe to re-run):
 #   1. Verifies prerequisites (git, curl, supported shell)
 #   2. Clones (or pulls) the skill repo to ~/.apparelhub-skills
 #   3. Symlinks ~/.apparelhub-skills/apparelhub into ~/.claude/skills/apparelhub
-#   4. Adds the skill scripts dir to your shell PATH (via install_path.sh)
-#   5. Stores your ApparelHub API key in ~/.apparelhub-skills/.env (chmod 600)
-#      and sources it from your shell rc file
-#   6. Runs ah_check to verify the key works against the platform
+#   4. Adds the skill scripts dir to your shell PATH (via claude-code/install_path.sh)
+#   5. Prompts for your ApparelHub API key (or reads it from env)
+#   6. Runs ah_check to verify the key works against https://api.apparelhub.ai
+#   7. EXITS without persisting the key, unless --persist was passed
 #
 # Source: https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh
-# Read it before piping to bash: curl -fsSL https://apparelhub.ai/install-skill.sh | less
+# Trust model: https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/SECURITY.md
+# Read this script before piping to bash: curl -fsSL https://apparelhub.ai/install-skill.sh | less
 
 set -euo pipefail
 
-# ---- environment selection -------------------------------------------------
-# Honor APPARELHUB_API_BASE for environment selection so the same installer
-# works against dev or prod. Default to prod; set
-#   APPARELHUB_API_BASE=https://api.dev.apparelhub.ai
-# to target the dev stack. The detected host is also used to derive the
-# front-end host (apparelhub.ai vs dev.apparelhub.ai) for any URLs we print.
-API_BASE="${APPARELHUB_API_BASE:-https://api.apparelhub.ai}"
-API_BASE="${API_BASE%/}"
-HUB_HOST=$(printf '%s' "$API_BASE" | sed -e 's,^https\?://,,' -e 's,^api\.,,' -e 's,/.*$,,')
+# ---- canonical host (hard-pinned; see SECURITY.md §2c) ----------------------
+
+API_BASE="https://api.apparelhub.ai"
+HUB_HOST="apparelhub.ai"
+
+# ---- args -------------------------------------------------------------------
+
+PERSIST=0
+for arg in "$@"; do
+    case "$arg" in
+        --persist) PERSIST=1 ;;
+        --help|-h)
+            sed -n '2,30p' "$0"
+            exit 0
+            ;;
+        *) ;;
+    esac
+done
 
 # ---- pretty output helpers --------------------------------------------------
 
@@ -48,6 +62,20 @@ ok()    { printf '%s   ok%s %s\n' "$C_GREEN" "$C_RESET" "$1"; }
 warn()  { printf '%s   !! %s%s\n' "$C_RED" "$1" "$C_RESET" >&2; }
 fail()  { printf '\n%sinstall failed:%s %s\n' "$C_RED" "$C_RESET" "$1" >&2; exit 1; }
 
+# ---- trust-model preamble ---------------------------------------------------
+
+cat <<EOF
+
+${C_DIM}ApparelHub skill installer (v2.0)
+- This installs into ~/.apparelhub-skills/ and symlinks into
+  ~/.claude/skills/apparelhub/. It edits your shell rc to add the
+  skill's scripts/ dir to PATH.
+- The API key you supply is sent ONLY to ${API_BASE} for a one-time
+  verification (no other host). The key is NOT written to disk unless
+  you pass --persist.
+- Full trust model: https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/SECURITY.md${C_RESET}
+EOF
+
 # ---- OS + prerequisites -----------------------------------------------------
 
 step "Checking your system"
@@ -56,8 +84,8 @@ case "$(uname -s)" in
     Darwin|Linux) ok "$(uname -s)" ;;
     *)
         fail "this installer supports macOS and Linux only.
-       On Windows or other platforms, follow the manual install instructions:
-       https://github.com/ApparelHub-AI/apparelhub-skills#install"
+       On Windows or other platforms, see the porting guides:
+       https://github.com/ApparelHub-AI/apparelhub-skills/tree/main/porting-guides"
         ;;
 esac
 
@@ -68,11 +96,6 @@ done
 ok "git + curl available"
 
 if ! command -v claude >/dev/null 2>&1; then
-    # Soft note rather than a red warning. Many users invoke Claude through
-    # a custom harness (e.g. OpenClaw, Cline, Aider, or a web UI that proxies
-    # the chat into a container running Claude) where the `claude` binary is
-    # never on the local PATH. The install still works correctly in those
-    # setups.
     printf '%s   .. claude CLI not on PATH (fine if you use a custom harness or web UI)%s\n' \
         "$C_DIM" "$C_RESET"
 fi
@@ -120,7 +143,7 @@ else
     ok "created symlink $SKILL_LINK -> $SKILL_SRC"
 fi
 
-# ---- detect shell rc file (used by both PATH setup + key sourcing) ----------
+# ---- detect shell rc file (used by PATH setup + optional --persist) ---------
 
 SHELL_NAME=$(basename "${SHELL:-/bin/bash}")
 case "$SHELL_NAME" in
@@ -140,54 +163,39 @@ esac
 
 step "Adding the skill scripts dir to your PATH"
 
-bash "$SKILL_SRC/scripts/install_path.sh" >/dev/null
+# In v2.0, install_path.sh lives under the claude-code/ overlay.
+bash "$REPO_DIR/claude-code/install_path.sh" >/dev/null
 ok "install_path.sh ran (rc file: ${RC_FILE:-unknown shell, see manual instructions above})"
 
 # ---- API key resolution -----------------------------------------------------
 
-step "Setting your ApparelHub API key"
+step "Resolving your ApparelHub API key"
 
-ENV_FILE="$REPO_DIR/.env"
 API_KEY="${APPARELHUB_API_KEY:-}"
 
 # Order of precedence:
-#   1. APPARELHUB_API_KEY already in the environment (re-run / scripted install)
-#   2. ~/.apparelhub-skills/.env from a previous install (reuse it silently)
+#   1. APPARELHUB_API_KEY already in the environment
+#   2. Existing ~/.apparelhub-skills/.env from a prior --persist install (reuse)
 #   3. Prompt the user via /dev/tty (works under `curl ... | bash`)
+ENV_FILE="$REPO_DIR/.env"
 if [ -z "$API_KEY" ] && [ -f "$ENV_FILE" ]; then
     # shellcheck disable=SC1090
-    . "$ENV_FILE"
+    . "$ENV_FILE" 2>/dev/null || true
     API_KEY="${APPARELHUB_API_KEY:-}"
-    [ -n "$API_KEY" ] && ok "reusing key from $ENV_FILE"
+    if [ -n "$API_KEY" ]; then
+        ok "reusing key from previous --persist install at $ENV_FILE"
+    fi
 fi
 
 if [ -z "$API_KEY" ]; then
-    # Probe whether we can actually OPEN /dev/tty for read, not just whether
-    # the file exists. Many headless contexts (custom harnesses, CI runners,
-    # etc.) have the device node present, so `[ -r /dev/tty ]` is misleadingly
-    # true, but opening it for read fails because nothing is on the other end.
-    # Run the open in a subshell so a failure doesn't take down the install
-    # script.
     if ! ( exec 3</dev/tty ) 2>/dev/null; then
         fail "no API key supplied and no interactive terminal is attached
-       to this install. This is normal in custom harnesses (e.g.
-       OpenClaw, Cline, Aider), CI runners, and other contexts where
-       the agent has no controlling terminal.
-
-       Re-run with the key supplied as an environment variable:
+       to this install. Re-run with the key supplied as an environment
+       variable:
          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\"
 
        If your Claude agent is doing the install for you, send it a
-       SELF-CONTAINED chat message. Claude has no prior knowledge of
-       ApparelHub, so the prompt must include the exact command. For
-       example:
-         \"Please run this exact command for me:
-          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\"
-          This is the ApparelHub installer; source is at
-          https://github.com/ApparelHub-AI/apparelhub-skills/blob/main/install.sh.\"
-
-       Or copy a ready-made harness prompt with your key pre-filled from
-       https://${HUB_HOST}/developer/api-keys (Custom harness tab).
+       SELF-CONTAINED chat message that includes the full command.
 
        Generate a key at https://${HUB_HOST}/developer/api-keys"
     fi
@@ -196,69 +204,57 @@ if [ -z "$API_KEY" ]; then
     IFS= read -rs API_KEY </dev/tty || true
     printf '\n'
     if [ -z "$API_KEY" ]; then
-        # Belt + suspenders: if the read failed despite our probe passing
-        # (race, slow tty open, etc.), still surface the harness-aware copy
-        # instead of the prior generic "no key entered" line.
-        fail "no key entered. If you intended to install non-interactively
-       (custom harness, CI, etc.), supply the key as an env var:
+        fail "no key entered. If you intended to install non-interactively,
+       supply the key as an env var:
          APPARELHUB_API_KEY=<your-key> bash -c \"\$(curl -fsSL https://${HUB_HOST}/install-skill.sh)\""
     fi
 fi
 
-# Write the .env (bash-compatible). Fish gets a parallel .env.fish below.
-# If a non-default APPARELHUB_API_BASE was supplied (e.g. dev install), persist
-# that too so subsequent shells + the packaged skill scripts (ah_check,
-# ah_curl, ah_poll_mockup) target the same env. The default is implicit; only
-# persist when the user explicitly chose a non-default base URL.
-umask 077
-{
-    printf 'export APPARELHUB_API_KEY=%s\n' "$API_KEY"
-    if [ "$API_BASE" != "https://api.apparelhub.ai" ]; then
-        printf 'export APPARELHUB_API_BASE=%s\n' "$API_BASE"
-    fi
-} > "$ENV_FILE"
-chmod 600 "$ENV_FILE"
-ok "key saved to $ENV_FILE (chmod 600, target $API_BASE)"
+# ---- optional persistence (--persist only) ----------------------------------
 
-if [ "$SHELL_NAME" = "fish" ]; then
-    ENV_FISH="$REPO_DIR/.env.fish"
-    {
-        printf 'set -gx APPARELHUB_API_KEY %s\n' "$API_KEY"
-        if [ "$API_BASE" != "https://api.apparelhub.ai" ]; then
-            printf 'set -gx APPARELHUB_API_BASE %s\n' "$API_BASE"
+if [ $PERSIST -eq 1 ]; then
+    printf "\n${C_RED}--persist requested.${C_RESET}\n"
+    printf "Writing your API key to %s (chmod 600) and sourcing it\n" "$ENV_FILE"
+    printf "from %s on every shell login.\n" "${RC_FILE:-your shell rc file}"
+    printf "Anyone with read access to those files (synced dotfiles, backups,\n"
+    printf "borrowed laptops, etc.) can read the key. See SECURITY.md §2b.\n\n"
+
+    umask 077
+    printf 'export APPARELHUB_API_KEY=%s\n' "$API_KEY" > "$ENV_FILE"
+    chmod 600 "$ENV_FILE"
+    ok "key saved to $ENV_FILE"
+
+    if [ "$SHELL_NAME" = "fish" ]; then
+        ENV_FISH="$REPO_DIR/.env.fish"
+        printf 'set -gx APPARELHUB_API_KEY %s\n' "$API_KEY" > "$ENV_FISH"
+        chmod 600 "$ENV_FISH"
+        ok "fish-compatible env written to $ENV_FISH"
+    fi
+
+    SOURCE_MARKER="# apparelhub-skills API key"
+    if [ -n "$RC_FILE" ]; then
+        if [ -f "$RC_FILE" ] && grep -qF "$SOURCE_MARKER" "$RC_FILE"; then
+            ok "$RC_FILE already sources the key"
+        else
+            mkdir -p "$(dirname "$RC_FILE")"
+            case "$SHELL_NAME" in
+                fish)
+                    printf '\n%s\nif test -f %s\n    source %s\nend\n' \
+                        "$SOURCE_MARKER" "$REPO_DIR/.env.fish" "$REPO_DIR/.env.fish" >> "$RC_FILE"
+                    ;;
+                *)
+                    printf '\n%s\n[ -f %s ] && . %s\n' \
+                        "$SOURCE_MARKER" "$ENV_FILE" "$ENV_FILE" >> "$RC_FILE"
+                    ;;
+            esac
+            ok "added sourcing line to $RC_FILE"
         fi
-    } > "$ENV_FISH"
-    chmod 600 "$ENV_FISH"
-    ok "fish-compatible env written to $ENV_FISH"
-fi
-
-# Add a sourcing line to the rc file so future shells pick up the key.
-# Idempotent via marker.
-SOURCE_MARKER="# apparelhub-skills API key"
-if [ -n "$RC_FILE" ]; then
-    if [ -f "$RC_FILE" ] && grep -qF "$SOURCE_MARKER" "$RC_FILE"; then
-        ok "$RC_FILE already sources the key"
-    else
-        mkdir -p "$(dirname "$RC_FILE")"
-        case "$SHELL_NAME" in
-            fish)
-                printf '\n%s\nif test -f %s\n    source %s\nend\n' \
-                    "$SOURCE_MARKER" "$REPO_DIR/.env.fish" "$REPO_DIR/.env.fish" >> "$RC_FILE"
-                ;;
-            *)
-                printf '\n%s\n[ -f %s ] && . %s\n' \
-                    "$SOURCE_MARKER" "$ENV_FILE" "$ENV_FILE" >> "$RC_FILE"
-                ;;
-        esac
-        ok "added sourcing line to $RC_FILE"
     fi
 fi
 
-# Make the key live in THIS shell so ah_check below works. Pass
-# APPARELHUB_API_BASE through too so ah_check targets the right environment
-# (defaults to prod, but a dev install passes the dev base URL).
+# Make the key live in THIS shell so the ah_check call below works. The
+# verification request goes only to $API_BASE (the canonical host).
 export APPARELHUB_API_KEY="$API_KEY"
-export APPARELHUB_API_BASE="$API_BASE"
 
 # ---- verify with ah_check ---------------------------------------------------
 
@@ -276,33 +272,39 @@ cat <<EOF
 
 ${C_GREEN}Done.${C_RESET} The ApparelHub skill is installed.
 
-Next step depends on how you talk to Claude:
+Next:
 
-  ${C_BLUE}- Claude Code (CLI):${C_RESET}
-      Open a new terminal (or run: source ${RC_FILE:-your shell rc file})
-      so the next shell has PATH + APPARELHUB_API_KEY set, then run
-      \`claude\` and ask it to design a tee or list your products.
+  ${C_BLUE}If you're using Claude Code (CLI):${C_RESET}
+    Open a new terminal so the next shell has the PATH update, then
+    run \`claude\`. Make sure APPARELHUB_API_KEY is set in that shell
+    (via your shell rc, direnv, or a host secret manager).
+EOF
 
-  ${C_BLUE}- Custom harness or web UI talking to Claude through any${C_RESET}
-    ${C_BLUE}  chat interface (e.g. OpenClaw, Cline, Aider):${C_RESET}
-      Start a NEW conversation. Claude discovers skills at session start,
-      so the running session won't see ApparelHub until you open a fresh
-      conversation. No restart of your harness needed.
+if [ $PERSIST -eq 0 ]; then
+    cat <<EOF
 
-  ${C_BLUE}- Claude Web or any other AI agent (Codex, ChatGPT, Gemini, ...):${C_RESET}
-      The skill files were installed locally, but Claude Web and other
-      agents can't read your local filesystem. Use the bootstrap prompt
-      instead:
-        ${REPO_DIR}/apparelhub/BOOTSTRAP-PROMPT.md
-      Paste its contents into your agent's project / system prompt and
-      provide your API key as an env var or in the prompt.
+  ${C_BLUE}Setting APPARELHUB_API_KEY persistently:${C_RESET}
+    The v2.0 installer does NOT persist your key. Pick one:
+      - shell rc: add \`export APPARELHUB_API_KEY=...\` to ~/.zshrc / ~/.bashrc
+      - direnv:   add \`export APPARELHUB_API_KEY=...\` to a project .envrc
+      - macOS Keychain / 1Password CLI / etc.
+    Or re-run with --persist if you want the v1.x \`.env\` behavior.
+EOF
+fi
+
+cat <<EOF
+
+  ${C_BLUE}If you're using ChatGPT, Gemini, or another tool-calling agent:${C_RESET}
+    See ${REPO_DIR}/porting-guides/chatgpt-gemini.md.
+
+  ${C_BLUE}If you're using a bare-HTTP agent:${C_RESET}
+    See ${REPO_DIR}/porting-guides/bare-http.md.
 
 Useful files:
-  - Recommended permission allowlist (drops permission prompts):
-      ${REPO_DIR}/settings.recommended.json
-  - Universal bootstrap prompt for any LLM:
-      ${REPO_DIR}/apparelhub/BOOTSTRAP-PROMPT.md
-  - Full setup docs: https://apparelhub.ai/agents
-  - API reference:   https://apparelhub.ai/developer/api-docs
+  - Trust model:               ${REPO_DIR}/SECURITY.md
+  - Recommended allowlist:     ${REPO_DIR}/claude-code/settings.recommended.json
+  - Per-platform porting docs: ${REPO_DIR}/porting-guides/
+  - Full setup walkthrough:    https://${HUB_HOST}/agents
+  - API reference:             https://${HUB_HOST}/developer/api-docs
 
 EOF

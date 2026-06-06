@@ -1,0 +1,114 @@
+name: Forbidden patterns
+
+# Fails any PR that reintroduces v1.x antipatterns:
+#   1. Permission-bypass framing in scripts (the v1.x "exists to suppress
+#      Claude Code's expansion check" rationale)
+#   2. The user-overridable APPARELHUB_API_BASE knob in helpers or installer
+#   3. The ah_curl wrapper (which forwarded keys to arbitrary URLs)
+#
+# Documentation that EXPLAINS these were removed (SECURITY.md,
+# porting-guides/, acceptance/, README.md migration sections) is allowed —
+# those mentions are deliberate and helpful. The grep scopes below
+# restrict each check to where reintroduction would represent live
+# functionality, not historical documentation.
+#
+# See SECURITY.md §3 for the trust model these checks enforce.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  forbidden-patterns:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ah_curl must stay deleted (file existence check)
+        run: |
+          set -euo pipefail
+          for path in apparelhub/scripts/ah_curl scripts/ah_curl claude-code/ah_curl; do
+            if [ -e "$path" ]; then
+              echo "ERROR: $path exists. ah_curl was deleted in v2.0 because it" >&2
+              echo "       forwarded the API key to arbitrary URLs. Use plain" >&2
+              echo "       curl https://api.apparelhub.ai/agents/v1/... instead." >&2
+              echo "       See SECURITY.md §2d." >&2
+              exit 1
+            fi
+          done
+
+      - name: No permission-bypass framing in shipped scripts
+        run: |
+          set -euo pipefail
+          # Scope: scripts only. Documentation that EXPLAINS these were
+          # removed is allowed.
+          violations=$(grep -lEi 'simple_expansion|expansion-free|allowlist-clean' \
+              apparelhub/scripts/ah_check \
+              apparelhub/scripts/ah_poll_mockup \
+              apparelhub/scripts/ah_classify_previews \
+              apparelhub/scripts/ah_pick_provider_url \
+              apparelhub/scripts/ah_pick_dimensions \
+              apparelhub/scripts/make_transparent.py \
+              claude-code/install_path.sh \
+              install.sh \
+              2>/dev/null || true)
+          if [ -n "$violations" ]; then
+            echo "ERROR: forbidden v1.x framing in script files:" >&2
+            echo "$violations" >&2
+            echo "       See SECURITY.md §2a." >&2
+            exit 1
+          fi
+
+      - name: No APPARELHUB_API_BASE reads in helpers or installer
+        run: |
+          set -euo pipefail
+          violations=$(grep -lE 'APPARELHUB_API_BASE' \
+              apparelhub/scripts/ah_check \
+              apparelhub/scripts/ah_poll_mockup \
+              apparelhub/scripts/ah_classify_previews \
+              apparelhub/scripts/ah_pick_provider_url \
+              apparelhub/scripts/ah_pick_dimensions \
+              apparelhub/scripts/make_transparent.py \
+              claude-code/install_path.sh \
+              install.sh \
+              2>/dev/null || true)
+          if [ -n "$violations" ]; then
+            echo "ERROR: APPARELHUB_API_BASE reintroduced in scripts or installer:" >&2
+            echo "$violations" >&2
+            echo "       The canonical host is hard-pinned. See SECURITY.md §2c." >&2
+            exit 1
+          fi
+
+      - name: Helper scripts that make network calls must pin canonical host
+        run: |
+          set -euo pipefail
+          for script in apparelhub/scripts/ah_check apparelhub/scripts/ah_poll_mockup; do
+            if [ ! -e "$script" ]; then
+              continue
+            fi
+            if ! grep -qE 'https://api\.apparelhub\.ai' "$script"; then
+              echo "ERROR: $script does not pin https://api.apparelhub.ai" >&2
+              exit 1
+            fi
+          done
+
+      - name: Installer must not write APPARELHUB_API_KEY without --persist
+        run: |
+          set -euo pipefail
+          # Heuristic: any printf-of-APPARELHUB_API_KEY-into-a-file must
+          # appear after a PERSIST guard.
+          if grep -qE 'printf.*APPARELHUB_API_KEY=' install.sh; then
+            # Confirm there's a PERSIST guard before the printf call.
+            persist_line=$(grep -nE '^[[:space:]]*if \[ \$PERSIST' install.sh | head -1 | cut -d: -f1)
+            printf_line=$(grep -nE 'printf .*APPARELHUB_API_KEY=' install.sh | head -1 | cut -d: -f1)
+            if [ -z "$persist_line" ] || [ "$persist_line" -gt "$printf_line" ]; then
+              echo "ERROR: install.sh writes APPARELHUB_API_KEY without a --persist gate." >&2
+              echo "       See SECURITY.md §2b." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Smoke summary
+        run: echo "All forbidden-pattern checks passed."

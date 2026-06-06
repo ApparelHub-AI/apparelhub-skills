@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
 """
-ah_poll_mockup: poll a Printful/Printify mockup job until it's completed
-AND at least one preview row has a populated preview_url.
+ah_poll_mockup — block until a Printful/Printify mockup job is fully
+ready (status=completed AND at least one preview_url ingested).
 
-This script collapses what used to be TWO polling phases (status=completed,
-then preview_url ingestion) into ONE call against the job-status endpoint.
-The job endpoint carries both signals; there is NO separate "preview-job
-listing" endpoint to call; that surface returned 0 rows in the field even
-after the job-status endpoint reported preview_url populated.
+Value-add: the mockup pipeline has TWO completion gates, not one. The
+job reports `status=completed` as soon as the provider's mockup
+generator finishes its task. The per-preview `preview_url` field
+(populated when we mirror the mockup from the provider's CDN to our S3)
+lands separately and can lag the `completed` status by 20+ minutes. A
+naive poll that stops at `completed` will then try to use a preview row
+with `preview_url=NULL` and end up with broken product cards.
+
+This script encodes the two-phase state machine + transient HTTP retry
+semantics so callers don't have to. It is NOT a prompt-suppression
+wrapper; your runtime SHOULD prompt when it expands $APPARELHUB_API_KEY
+the first time. Approve in context.
 
 Usage:
     ah_poll_mockup <provider_uuid> <job_uuid>
@@ -22,24 +29,23 @@ Exit codes:
     1: timeout, job failed, auth error, or too many consecutive transient errors
     2: APPARELHUB_API_KEY not set, or bad CLI args
 
-Why this exists: inline `for` loops with $(...) command substitution trip
-Claude Code's simple_expansion check on every iteration regardless of
-allowlist. Wrapping the poll in a packaged script keeps the agent's visible
-command line expansion-free.
+Canonical host: https://api.apparelhub.ai is hard-pinned (see
+SECURITY.md §2c). No env-var override. Contributors testing against dev
+should fork and edit the constant below.
 
-Transient error handling (v1.11+): the job-status endpoint occasionally
-returns HTTP 5xx (most commonly 504 from API Gateway when our Lambda is
-mid-S3-ingestion or Printful's upstream is slow). These are EXPECTED during
-polling because the job is still progressing in the background. The script
-treats the following as transient and keeps polling:
+Transient error handling: the job-status endpoint occasionally returns
+HTTP 5xx (most commonly 504 from the gateway when our backend is
+mid-S3-ingestion or the provider upstream is slow). These are EXPECTED
+during polling because the job is still progressing. The script treats
+the following as transient and keeps polling:
   - HTTP 502 (Bad Gateway)
   - HTTP 503 (Service Unavailable)
   - HTTP 504 (Gateway Timeout)
   - HTTP 429 (Too Many Requests)
   - URLError (TCP connect failure, DNS, etc.)
-Up to --max-transient-errors consecutive failures (default 5) before bailing.
-Counter resets to 0 on any successful poll. 4xx (other than 429) and other
-5xx codes are still fatal.
+Up to --max-transient-errors consecutive failures (default 5) before
+bailing. Counter resets to 0 on any successful poll. 4xx (other than
+429) and other 5xx codes are still fatal.
 """
 
 from __future__ import annotations
@@ -52,19 +58,9 @@ import time
 import urllib.error
 import urllib.request
 
-# Honor APPARELHUB_API_BASE for environment selection; default to prod. Strip
-# any trailing slash so concatenation below is consistent.
-API_BASE = os.environ.get("APPARELHUB_API_BASE", "https://api.apparelhub.ai").rstrip("/")
-
-
-def _hub_host_from_api_base(api_base: str) -> str:
-    """Derive the front-end host (e.g. apparelhub.ai or dev.apparelhub.ai)
-    from the API base URL by stripping scheme + leading 'api.'."""
-    host = api_base.split("://", 1)[-1].split("/", 1)[0]
-    return host[4:] if host.startswith("api.") else host
-
-
-HUB_HOST = _hub_host_from_api_base(API_BASE)
+# Hard-pinned canonical host. See SECURITY.md §2c. No env-var override.
+API_BASE = "https://api.apparelhub.ai"
+HUB_HOST = "apparelhub.ai"
 
 
 def fetch_job(provider_uuid: str, job_uuid: str, api_key: str) -> dict:

@@ -5,8 +5,8 @@ A complete walkthrough for the Champion Packable Anorak (Printful product 399) w
 **Read `references/embroidery.md` first.** The thread palette and the `thread_colors_<placement>` options trap will absolutely ruin your day if you skip them.
 
 **Invocation convention used throughout this file:**
-- All Agent API calls go through `ah_curl` (see `SKILL.md` section 1). Invoke via the full install path `~/.claude/skills/apparelhub/scripts/ah_curl` or as bare `ah_curl` if the scripts dir is on PATH.
-- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — substitute the LITERAL value from the previous step's response. **No shell variables.**
+- All Agent API calls are shown as plain `curl https://api.apparelhub.ai/agents/v1/...` invocations. Use any HTTP client equivalently — the canonical host is hard-pinned (see `../../SECURITY.md`).
+- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — substitute the value the previous step returned.
 
 ---
 
@@ -31,7 +31,7 @@ The design's dominant colors should be subsets of Printful's 15-color thread pal
 - Stick to 2-3 colors total for a chest crest
 
 ```bash
-ah_curl POST /agents/v1/images/generate -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "prompt": "flat heraldic crest emblem, bold forest green outline, bright yellow gold fills, simple geometric shapes, no fine detail, designed for embroidery stitching, on solid bright green #00FF00 background",
   "source": "Nano Banana",
   "size": "1024x1024"
@@ -63,7 +63,7 @@ Inspect `/tmp/crest_preview.jpg` to confirm clean transparency. Then upload:
 
 ```bash
 # Substitute the literal original image UUID from Phase 1.
-ah_curl POST /agents/v1/images/generated/<image_uuid>/transform \
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/<image_uuid>/transform" -H "x-api-key: $APPARELHUB_API_KEY" \
     -F image=@/tmp/crest_transparent.png
 ```
 
@@ -118,7 +118,7 @@ For our forest-green-and-gold crest, expected mapping:
 ## Phase 3 — Generate the mockup
 
 ```bash
-ah_curl POST /agents/v1/merchandise/product/preview -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
   "generated_image_uuid": "<transparent_image_uuid>",
   "provider_product_ref_id": "399",
@@ -171,7 +171,7 @@ Open `/tmp/mockup_check.png` and verify:
 Embroidery cost is higher than standard print. Recommended retail $89.99 on the Champion Anorak.
 
 ```bash
-ah_curl POST /agents/v1/product/create -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "name": "Heraldic Crest Embroidered Anorak",
   "description": "Classic heraldic crest embroidered on a Champion Packable Anorak. Lightweight, packable, perfect for transitional weather.",
   "generated_image_uuid": "<transparent_image_uuid>",
@@ -216,11 +216,11 @@ Capture the product UUID.
 Substitute the literal product UUID. 2XL costs $2 more — price adjusted.
 
 ```bash
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"S","provider_variant_id":11008}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"M","provider_variant_id":11009}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"L","provider_variant_id":11010}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":89.99,"color":"Black","size":"XL","provider_variant_id":11011}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":91.99,"color":"Black","size":"2XL","provider_variant_id":11012}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":89.99,"color":"Black","size":"S","provider_variant_id":11008}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":89.99,"color":"Black","size":"M","provider_variant_id":11009}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":89.99,"color":"Black","size":"L","provider_variant_id":11010}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":89.99,"color":"Black","size":"XL","provider_variant_id":11011}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":91.99,"color":"Black","size":"2XL","provider_variant_id":11012}'
 ```
 
 ---
@@ -230,22 +230,22 @@ ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","pri
 Same as standard apparel. The embroidery options propagate through fulfillment sync automatically — no extra parameters needed at the sync call.
 
 ```bash
-ah_curl GET /agents/v1/store
+curl -sS "https://api.apparelhub.ai/agents/v1/store" -H "x-api-key: $APPARELHUB_API_KEY"
 # Capture store UUID.
 
-ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<product_uuid>"]}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"product_uuids": ["<product_uuid>"]}'
 
 # Fulfillment first.
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise" -H "x-api-key: $APPARELHUB_API_KEY"
 # If this 400s with "thread_colors_chest_left option is missing or incorrect",
 # the options probably aren't at the right level. See references/embroidery.md.
 
 # Find Shopify integration.
-ah_curl GET /agents/v1/store/<store_uuid>
+curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 # Pull integration_uuid from ecommerce_statuses[].
 
 # Sales channel sync, as DRAFT.
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
 ---

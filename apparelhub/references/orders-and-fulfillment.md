@@ -7,7 +7,7 @@ How to interpret order data, payment status, and fulfillment state without givin
 ## 1. List orders
 
 ```bash
-ah_curl GET /agents/v1/orders?limit=10
+curl -sS "https://api.apparelhub.ai/agents/v1/orders?limit=10" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
 Useful filters:
@@ -18,7 +18,7 @@ Useful filters:
 ## 2. Order detail
 
 ```bash
-ah_curl GET /agents/v1/orders/<uuid>
+curl -sS "https://api.apparelhub.ai/agents/v1/orders/<uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
 Key fields:

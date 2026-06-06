@@ -5,8 +5,8 @@ A complete walkthrough for the most common workflow: user says "design me a sagu
 This is the canonical reference example. Adapt for other front-print apparel (hoodies, tanks, sweatshirts) by swapping the `product_ref_id` and variant IDs.
 
 **Invocation convention used throughout this file:**
-- All Agent API calls go through `ah_curl` (see `SKILL.md` section 1). Invoke via the full install path `~/.claude/skills/apparelhub/scripts/ah_curl` or as bare `ah_curl` if the scripts dir is on PATH.
-- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — when you see these, substitute the LITERAL value from the previous step's response. **Do not use shell variables** (`$IMAGE_UUID` would trigger Claude Code's expansion prompt on every call).
+- All Agent API calls are shown as plain `curl https://api.apparelhub.ai/agents/v1/...` invocations. Use any HTTP client equivalently — the canonical host is hard-pinned (see `../../SECURITY.md`).
+- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — when you see these, substitute the value the previous step returned. Whether you do that via shell variables, inline substitution, or your tool-calling agent's reasoning context is up to your runtime.
 
 ---
 
@@ -21,7 +21,7 @@ export APPARELHUB_API_KEY=ah_...   # one-time, in the shell you'll be working in
 ## Phase 1 — Generate the design
 
 ```bash
-ah_curl POST /agents/v1/images/generate -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "prompt": "vector flat illustration saguaro cactus silhouette desert sunset, warm orange and red palette, on pure RGB #00FF00 background, fully saturated bright green, NOT yellow-green or olive, NOT chartreuse",
   "source": "Nano Banana",
   "size": "1024x1024"
@@ -68,7 +68,7 @@ Upload the processed PNG to ApparelHub:
 
 ```bash
 # Substitute the literal image UUID from Phase 1.
-ah_curl POST /agents/v1/images/generated/abc-123-def/transform \
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/abc-123-def/transform" -H "x-api-key: $APPARELHUB_API_KEY" \
     -F image=@/tmp/design_transparent.png
 ```
 
@@ -90,7 +90,7 @@ Printful's prod provider UUID is `c8dff2fa-1a43-4734-93f0-e2ddd03eae53`.
 Verify the print template dimensions first (don't hardcode):
 
 ```bash
-ah_curl GET /agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/71
+curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/71" -H "x-api-key: $APPARELHUB_API_KEY"
 # Look at print_templates for the "front" placement.
 # Expect: area_width=728, area_height=376
 ```
@@ -115,7 +115,7 @@ If the merchant wants a TIGHTER or LOOSER look, pass `--collar-padding-pct`:
 Create the preview with ALL 15 variant IDs in one call. Substitute the LITERAL values from `/tmp/dimensions.json` AND the literal transparent-image UUID + URL from Phase 2:
 
 ```bash
-ah_curl POST /agents/v1/merchandise/product/preview -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
   "generated_image_uuid": "xyz-789-trans",
   "provider_product_ref_id": "71",
@@ -187,7 +187,7 @@ This prints the full (COLOR, ANGLE, URL) table AND writes `/tmp/picks.json` with
 Substitute literal values throughout: the transparent image UUID + URL from Phase 2, the job UUID from Phase 3, and the `display_image` + `gallery_images` URLs from `/tmp/picks.json` (Phase 4.0).
 
 ```bash
-ah_curl POST /agents/v1/product/create -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "name": "Saguaro Desert Sunset Tee",
   "description": "Hand-illustrated saguaro silhouette against a warm desert sunset.",
   "generated_image_uuid": "xyz-789-trans",
@@ -230,27 +230,27 @@ Capture the new product `uuid` from the response.
 
 ## Phase 5 — Add variants
 
-15 variants. Do NOT use a bash for-loop (each iteration triggers an expansion prompt). Issue 15 separate `ah_curl` calls with LITERAL IDs.
+15 variants — 3 colors × 5 sizes. There is no batch endpoint, so issue 15 separate POSTs:
 
 ```bash
 # Black: 4016 4017 4018 4019 4020 (S M L XL 2XL)
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"S","provider_variant_id":4016}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"M","provider_variant_id":4017}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"L","provider_variant_id":4018}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"XL","provider_variant_id":4019}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Black","price":27.99,"color":"Black","size":"2XL","provider_variant_id":4020}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":27.99,"color":"Black","size":"S","provider_variant_id":4016}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":27.99,"color":"Black","size":"M","provider_variant_id":4017}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":27.99,"color":"Black","size":"L","provider_variant_id":4018}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":27.99,"color":"Black","size":"XL","provider_variant_id":4019}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Black","price":27.99,"color":"Black","size":"2XL","provider_variant_id":4020}'
 # Heather Midnight Navy: 8495-8499
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"S","provider_variant_id":8495}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"M","provider_variant_id":8496}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"L","provider_variant_id":8497}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"XL","provider_variant_id":8498}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"2XL","provider_variant_id":8499}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"S","provider_variant_id":8495}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"M","provider_variant_id":8496}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"L","provider_variant_id":8497}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"XL","provider_variant_id":8498}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"Heather Midnight Navy","price":27.99,"color":"Navy","size":"2XL","provider_variant_id":8499}'
 # White: 4012-4015, 4011
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","price":27.99,"color":"White","size":"S","provider_variant_id":4012}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","price":27.99,"color":"White","size":"M","provider_variant_id":4013}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","price":27.99,"color":"White","size":"L","provider_variant_id":4014}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","price":27.99,"color":"White","size":"XL","provider_variant_id":4015}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","price":27.99,"color":"White","size":"2XL","provider_variant_id":4011}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"White","price":27.99,"color":"White","size":"S","provider_variant_id":4012}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"White","price":27.99,"color":"White","size":"M","provider_variant_id":4013}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"White","price":27.99,"color":"White","size":"L","provider_variant_id":4014}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"White","price":27.99,"color":"White","size":"XL","provider_variant_id":4015}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"White","price":27.99,"color":"White","size":"2XL","provider_variant_id":4011}'
 ```
 
 (Substitute the literal product UUID from Phase 4 in every line.)
@@ -260,10 +260,10 @@ ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"White","pri
 ## Phase 6 — Add product to the user's store
 
 ```bash
-ah_curl GET /agents/v1/store
+curl -sS "https://api.apparelhub.ai/agents/v1/store" -H "x-api-key: $APPARELHUB_API_KEY"
 # Pick the store UUID from the response.
 
-ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<product_uuid>"]}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"product_uuids": ["<product_uuid>"]}'
 ```
 
 ---
@@ -272,14 +272,14 @@ ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<pro
 
 ```bash
 # Fulfillment FIRST. Wait for success.
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise" -H "x-api-key: $APPARELHUB_API_KEY"
 
 # Find the user's Shopify integration. Pull integration_uuid from the response.
-ah_curl GET /agents/v1/store/<store_uuid>
+curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 # Look at ecommerce_statuses[] for the Shopify entry, grab its integration_uuid.
 
 # Sync to Shopify as DRAFT (default — don't pass listing_state=active).
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
 ---

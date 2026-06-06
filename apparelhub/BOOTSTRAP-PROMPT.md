@@ -114,11 +114,11 @@ need them:
 - https://github.com/ApparelHub-AI/apparelhub-skills/tree/main/apparelhub/references
 - https://github.com/ApparelHub-AI/apparelhub-skills/tree/main/apparelhub/examples
 
-If the user is on Claude Code, the better path is to install the actual skill
-via `curl -fsSL https://apparelhub.ai/install-skill.sh | bash` rather than
-relying on this bootstrap prompt. The skill ships packaged helper scripts
-(`ah_check`, `ah_curl`, `ah_poll_mockup`, `ah_pick_dimensions`,
-`make_transparent.py`, etc.) that this bootstrap can't replicate.
+This bootstrap is one way to get the knowledge into a tool-calling agent
+quickly. For Claude Code users, an `install.sh` is also available; see
+`https://apparelhub.ai/agents` for the install paths matched to your
+runtime. The knowledge and the API contract are the same regardless of
+which path you choose.
 
 ## ===== End of system-prompt block =====
 

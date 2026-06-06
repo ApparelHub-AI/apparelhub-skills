@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
-# ah_check: verify APPARELHUB_API_KEY is set AND valid against the live API.
+# ah_check — verify APPARELHUB_API_KEY is set AND accepted by the
+# ApparelHub Agent API before starting a multi-step workflow.
 #
-# Run this as the FIRST call of any session that uses the apparelhub skill.
-# Distinguishes three cases:
-#   - Not set:        exit 2 with instructions to generate one
-#   - Set but bad:    exit 3 (401/403 from the platform: revoked or wrong env)
-#   - Set and works:  exit 0 with a masked-key confirmation line
+# Distinguishes three failure modes a workflow shouldn't try to recover
+# from blindly:
+#   exit 0 — key is set and the platform accepts it.
+#   exit 2 — key is not set in the environment.
+#   exit 3 — key is set but the platform rejected it (401/403), or the
+#            request failed at the network level.
 #
-# The agent's visible command line is just `ah_check`. No $VAR expansion, so
-# Claude Code's simple_expansion check doesn't fire and the allowlist matches
-# cleanly.
+# Value-add: surfaces auth issues BEFORE you've burned 30 minutes
+# generating designs and mockups whose products you can't actually
+# create. Not for prompt suppression — your runtime SHOULD prompt the
+# first time it expands $APPARELHUB_API_KEY; that's the safety control
+# working correctly. Approve in context.
+#
+# The canonical API host is hard-pinned (see SECURITY.md §2c). There is
+# no runtime override. Contributors testing against dev should fork and
+# edit the constant below.
 
 set -euo pipefail
 
-# Environment selection. Defaults to prod; set APPARELHUB_API_BASE to point
-# at a different environment (e.g. https://api.dev.apparelhub.ai for the
-# dev stack) without editing any scripts.
-API_BASE="${APPARELHUB_API_BASE:-https://api.apparelhub.ai}"
-# Strip any trailing slash so concatenation below is consistent.
-API_BASE="${API_BASE%/}"
-HUB_HOST=$(printf '%s' "$API_BASE" | sed -e 's,^https\?://,,' -e 's,^api\.,,' -e 's,/.*$,,')
+# Hard-pinned canonical host. See SECURITY.md §2c. No env-var override.
+API_BASE="https://api.apparelhub.ai"
+HUB_HOST="apparelhub.ai"
 
 if [ -z "${APPARELHUB_API_KEY:-}" ]; then
     echo "ah_check: APPARELHUB_API_KEY not set in environment" >&2
@@ -28,9 +32,9 @@ if [ -z "${APPARELHUB_API_KEY:-}" ]; then
     exit 2
 fi
 
-# Hit a lightweight authed endpoint to verify the key works. /store is small
-# and always returns at least the user's default store, so it's a reliable
-# round-trip probe.
+# Hit a lightweight authed endpoint to verify the key works. /store is
+# small and always returns at least the user's default store, so it's a
+# reliable round-trip probe.
 HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
     "${API_BASE}/agents/v1/store" \
     -H "x-api-key: $APPARELHUB_API_KEY")
@@ -48,7 +52,6 @@ case "$HTTP_CODE" in
         ;;
     401|403)
         echo "ah_check: key set but rejected by the platform (HTTP $HTTP_CODE)" >&2
-        echo "         Target was $API_BASE; make sure the key was generated for THIS environment." >&2
         echo "         Verify at https://${HUB_HOST}/developer/api-keys" >&2
         exit 3
         ;;

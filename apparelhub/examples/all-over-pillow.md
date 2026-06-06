@@ -5,8 +5,8 @@ A complete walkthrough for an 18×18 square pillow with an edge-to-edge floral p
 **Read `references/all-over-print.md` first.** Don't skip it.
 
 **Invocation convention used throughout this file:**
-- All Agent API calls go through `ah_curl` (see `SKILL.md` section 1). Invoke via the full install path `~/.claude/skills/apparelhub/scripts/ah_curl` or as bare `ah_curl` if the scripts dir is on PATH.
-- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — substitute the LITERAL value from the previous step's response. **No shell variables.**
+- All Agent API calls are shown as plain `curl https://api.apparelhub.ai/agents/v1/...` invocations. Use any HTTP client equivalently — the canonical host is hard-pinned (see `../../SECURITY.md`).
+- Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — substitute the value the previous step returned.
 
 ---
 
@@ -29,7 +29,7 @@ The "don't name the product in the prompt" trap (see `references/all-over-print.
 # WRONG: "decorative pillow with watercolor flowers"
 # RIGHT: "flat watercolor wildflower pattern, edge-to-edge teal background, all-over textile graphic"
 
-ah_curl POST /agents/v1/images/generate -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "prompt": "flat watercolor wildflower pattern, scattered daisies and small pink blooms, edge-to-edge teal #1E7B7B background, all-over textile graphic, repeating motif fills entire canvas including all four corners",
   "source": "Seedream 4.5",
   "size": "1024x1024"
@@ -74,14 +74,14 @@ For an 18×18 pillow, area = 2717 × 2717 px. The template's `width` and `height
 
 Verify the print template first:
 ```bash
-ah_curl GET /agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/214
+curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/214" -H "x-api-key: $APPARELHUB_API_KEY"
 # Expect: front placement with area_width=2717, area_height=2717 for 18×18
 ```
 
 Create the preview. Substitute the LITERAL image UUID + URL from Phase 1:
 
 ```bash
-ah_curl POST /agents/v1/merchandise/product/preview -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
   "generated_image_uuid": "<image_uuid>",
   "provider_product_ref_id": "214",
@@ -146,7 +146,7 @@ Open `/tmp/mockup_check.png` and verify:
 Pricing for all-over pillows: ~$24 cost, recommended retail $44.99 for 18×18.
 
 ```bash
-ah_curl POST /agents/v1/product/create -d '{
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
   "name": "Teal Wildflower Throw Pillow",
   "description": "Hand-painted-style watercolor wildflower motif on a deep teal field. 18x18 polyester throw pillow with concealed zipper. Edge-to-edge print on both sides.",
   "generated_image_uuid": "<image_uuid>",
@@ -190,9 +190,9 @@ Capture the product `uuid`.
 For all 3 sizes (substitute literal product UUID):
 
 ```bash
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"18x18","price":44.99,"size":"18x18","color":"Teal","provider_variant_id":9515}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"20x12 Lumbar","price":42.99,"size":"20x12 Lumbar","color":"Teal","provider_variant_id":7907}'
-ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"22x22","price":54.99,"size":"22x22","color":"Teal","provider_variant_id":11077}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"18x18","price":44.99,"size":"18x18","color":"Teal","provider_variant_id":9515}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"20x12 Lumbar","price":42.99,"size":"20x12 Lumbar","color":"Teal","provider_variant_id":7907}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/<product_uuid>/variants" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"name":"22x22","price":54.99,"size":"22x22","color":"Teal","provider_variant_id":11077}'
 ```
 
 ---
@@ -202,20 +202,20 @@ ah_curl POST /agents/v1/product/<product_uuid>/variants -d '{"name":"22x22","pri
 Identical to the front-print-tee example. Add to store, sync fulfillment FIRST, then sync to sales channel as DRAFT.
 
 ```bash
-ah_curl GET /agents/v1/store
+curl -sS "https://api.apparelhub.ai/agents/v1/store" -H "x-api-key: $APPARELHUB_API_KEY"
 # Capture store UUID.
 
-ah_curl POST /agents/v1/store/<store_uuid>/products -d '{"product_uuids": ["<product_uuid>"]}'
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{"product_uuids": ["<product_uuid>"]}'
 
 # Fulfillment first
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise" -H "x-api-key: $APPARELHUB_API_KEY"
 
 # Find Shopify integration UUID
-ah_curl GET /agents/v1/store/<store_uuid>
+curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 # Read ecommerce_statuses[] for the Shopify entry's integration_uuid.
 
 # Sales channel sync, as DRAFT
-ah_curl POST /agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
 ---
