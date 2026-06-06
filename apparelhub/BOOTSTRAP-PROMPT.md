@@ -7,6 +7,27 @@ paste the block below into your agent's system prompt / project instructions /
 custom instructions, then supply your ApparelHub API key as an environment
 variable or include it in the conversation when you start a task.
 
+## Before pasting: check your platform's network sandbox
+
+Many hosted LLM surfaces (Claude on claude.ai, ChatGPT, Gemini, Codex Cloud)
+sandbox the network by default and will block outbound requests to hosts you
+haven't explicitly allowed. If your platform has a domain allowlist, add
+these three hosts before sending the agent any task:
+
+- `api.apparelhub.ai` (the Agent API)
+- `apparelhub-production-user-generated-public-objects.s3.amazonaws.com` (generated images and mockup previews)
+- `apparelhub.ai` (installer, OpenAPI docs, marketing pages)
+
+Platform-specific walkthroughs with screenshots:
+
+- Claude on the web: https://apparelhub.ai/blog/use-apparelhub-from-claude-web
+- ChatGPT: https://apparelhub.ai/blog/use-apparelhub-from-chatgpt
+- Gemini: https://apparelhub.ai/blog/use-apparelhub-from-gemini
+- Codex: https://apparelhub.ai/blog/use-apparelhub-from-codex
+
+If your platform doesn't sandbox the network (e.g. Claude Code on your local
+machine), you can skip the allowlist step.
+
 Source repo: https://github.com/ApparelHub-AI/apparelhub-skills
 Full setup docs: https://apparelhub.ai/agents
 API reference: https://apparelhub.ai/developer/api-docs
