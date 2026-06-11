@@ -15,7 +15,7 @@ haven't explicitly allowed. If your platform has a domain allowlist, add
 these three hosts before sending the agent any task:
 
 - `api.apparelhub.ai` (the Agent API)
-- `apparelhub-production-user-generated-public-objects.s3.amazonaws.com` (generated images and mockup previews)
+- `cdn.apparelhub.ai` (generated images and mockup previews)
 - `apparelhub.ai` (installer, OpenAPI docs, marketing pages)
 
 Platform-specific walkthroughs with screenshots:

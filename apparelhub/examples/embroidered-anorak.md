@@ -51,7 +51,7 @@ Capture the `uuid` and `url` from the response.
 
 ```bash
 # Download the green-background image to /tmp. Substitute the literal URL.
-curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/..." -o /tmp/crest_green.png
+curl -sS "https://cdn.apparelhub.ai/..." -o /tmp/crest_green.png
 
 # Strip the green background via the packaged script.
 python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \

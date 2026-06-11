@@ -42,7 +42,7 @@ Capture the `uuid` and `url` from the response.
 
 ```bash
 # Substitute the LITERAL url. Download to /tmp, then check corner pixels.
-curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/..." -o /tmp/pillow_design.png
+curl -sS "https://cdn.apparelhub.ai/..." -o /tmp/pillow_design.png
 
 # Quick 4-corner pixel check via Python. Save as /tmp/check_corners.py and run:
 python3 /tmp/check_corners.py

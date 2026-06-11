@@ -30,7 +30,7 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api
 
 Response shape:
 ```json
-{ "generated_image": { "uuid": "abc-123-def", "url": "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/.../abc-123-def.png" } }
+{ "generated_image": { "uuid": "abc-123-def", "url": "https://cdn.apparelhub.ai/.../abc-123-def.png" } }
 ```
 
 Capture the `uuid` and `url` in your reasoning context. From now on you'll substitute those LITERAL values into subsequent calls.
@@ -48,7 +48,7 @@ Download the green-background image to `/tmp`, then run the packaged `make_trans
 
 ```bash
 # Replace the URL below with the LITERAL url from Phase 1's response.
-curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/.../abc-123-def.png" \
+curl -sS "https://cdn.apparelhub.ai/.../abc-123-def.png" \
     -o /tmp/design_green.png
 
 python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \
@@ -122,7 +122,7 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/previe
   "templates": [
     {
       "provider_ref_id": "front",
-      "image_url": "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/.../xyz-789-trans.png",
+      "image_url": "https://cdn.apparelhub.ai/.../xyz-789-trans.png",
       "area_width": 728,
       "area_height": 376,
       "width": 413,
@@ -156,9 +156,9 @@ Extract the black front URL with `ah_pick_provider_url`, then download for inspe
 
 ```bash
 ah_pick_provider_url /tmp/preview_job.json black front
-# Returns: https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<uuid>.png
+# Returns: https://cdn.apparelhub.ai/<uuid>.png
 
-curl -sS -o /tmp/mockup_check.png "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<paste-uuid-from-above>.png"
+curl -sS -o /tmp/mockup_check.png "https://cdn.apparelhub.ai/<paste-uuid-from-above>.png"
 ```
 
 Open `/tmp/mockup_check.png` and verify:

@@ -62,7 +62,7 @@ Use the bundled helper at `scripts/make_transparent.py` (relative to this skill'
 ```bash
 # Download the generated image (it has a solid green background).
 # Substitute the URL the Phase 1 response returned.
-curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<image-path-from-phase-1-response>.png" \
+curl -sS "https://cdn.apparelhub.ai/<image-path-from-phase-1-response>.png" \
     -o /tmp/design_green.png
 
 # Strip the background -> true RGBA. The skill ships make_transparent.py for
@@ -275,10 +275,10 @@ After `ah_poll_mockup` exits 0, **visually inspect at least one mockup** before 
 ```bash
 # Print the black front URL on stdout (substitute the literal value into the next curl).
 ah_pick_provider_url /tmp/preview_job.json black front
-# Returns: https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<uuid>.png
+# Returns: https://cdn.apparelhub.ai/<uuid>.png
 
 # Download for visual inspection (paste the URL literally — don't capture it in $VAR):
-curl -sS -o /tmp/mockup_check.png "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<the-uuid-from-above>.png"
+curl -sS -o /tmp/mockup_check.png "https://cdn.apparelhub.ai/<the-uuid-from-above>.png"
 ```
 
 Check for:

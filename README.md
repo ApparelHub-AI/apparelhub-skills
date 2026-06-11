@@ -182,6 +182,7 @@ short version:
 
 | Version | Date | Summary |
 |---|---|---|
+| 2.1 | 2026-06-11 | Docs reference the branded `cdn.apparelhub.ai` host instead of the raw object-storage URL, matching the platform cutover. Worked-example response shapes and verification `curl`s now show CDN URLs (both forms serve the same bytes). |
 | 2.0 | 2026-06-06 | **Platform-neutral, security-first re-architecture.** `ah_curl` deleted (forwarded keys to arbitrary URLs). `APPARELHUB_API_BASE` removed from user path; canonical host hard-pinned in every helper. Installer no longer persists the API key to disk or edits shell rc by default (opt in with `--persist`). New top-level `SECURITY.md` documents trust model + non-goals + threat model, enforced by CI grep. New `apparelhub/references/api-contract.md` makes the HTTP contract consumable by bare-HTTP agents. New `porting-guides/` directory ships per-platform walkthroughs for bare-HTTP, Claude Code, and ChatGPT/Gemini tool-calling. Claude-Code-specific bits moved to a `claude-code/` overlay. All "exists to suppress the permission prompt" framing removed from scripts and docs; see SECURITY.md §2a. |
 | 1.16 | 2026-06-05 | Rebrand bridge → harness, drop Docker mentions, strip em-dashes from all public-facing surfaces. |
 | 1.15 | 2026-06-05 | End-to-end environment selection via `APPARELHUB_API_BASE` (removed in v2.0). |
