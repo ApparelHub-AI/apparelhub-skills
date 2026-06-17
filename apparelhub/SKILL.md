@@ -144,6 +144,7 @@ reference up front saves you from shipping a broken product.
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
 | Variant IDs, pricing, color limit, BC 3001 vs Comfort Colors trade-off | `references/garment-catalog.md` |
 | Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
+| **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and
@@ -155,6 +156,7 @@ adapt:
 | A front-print tee end-to-end | `examples/front-print-tee.md` |
 | An all-over-print pillow / doormat / luggage tag | `examples/all-over-pillow.md` |
 | An embroidered chest crest on a jacket / polo | `examples/embroidered-anorak.md` |
+| Reviewing + approving a held order as an agent (workflow config → poll the queue → approve/hold) | `examples/order-management.md` |
 
 ---
 
