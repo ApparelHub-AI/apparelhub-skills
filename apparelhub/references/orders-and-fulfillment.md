@@ -129,3 +129,113 @@ Look for `ORDER_CREATED` and `ORDER_CONFIRMED` rows in the order's audit log:
 - BOTH should exist for an order in `in_production` or beyond
 
 If `ORDER_CREATED` exists but `ORDER_CONFIRMED` doesn't, the order is stuck in draft on the provider's side — usually because `auto_fulfill_on_payment` was off OR the merchant cancelled before confirmation.
+
+---
+
+## 8. The configurable fulfillment workflow (read + set it)
+
+Each store has a **fulfillment workflow** that decides what happens to a paid
+order before it reaches the manufacturer. As an agent you can read it and set it.
+
+```bash
+# Read the store's workflow + notification settings
+curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/settings" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+
+# Set it
+curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/settings" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"fulfillment_mode":"review","approval_authority":"agent"}'
+```
+
+### `fulfillment_mode` — how much to automate
+
+| Mode | What happens on a paid order |
+|---|---|
+| `auto` | Draft created on the provider, then auto-confirmed → production. Hands off. |
+| `confirm` | Draft created automatically; waits for ONE confirm before production. |
+| `review` | Held BEFORE submission; requires approval, then drafts + proceeds. Safest. |
+
+### `approval_authority` — who handles an order that needs review
+
+| Authority | Meaning for you (the agent) |
+|---|---|
+| `human` | Held orders wait in the merchant's dashboard. You are NOT expected to act. |
+| `agent` | Held orders are YOURS to decide — poll the queue (section 9) and act via the API. |
+| `rules` | Orders flow through automatically; only guardrail trips stop, then routed to you. |
+
+### Smart guardrails (escalate an otherwise-auto order to review)
+
+- `hold_orders_above_amount` (number or null) — hold when order total exceeds this.
+- `hold_below_margin_pct` (number or null) — hold when profit margin % is below this.
+- `hold_on_negative_margin` (bool) — always hold an order that would lose money.
+
+When a guardrail trips, the order is held with `hold_reason` set to one of
+`high_value` / `low_margin` / `negative_margin`; review-mode holds use
+`review_mode`.
+
+---
+
+## 9. Acting on orders that need a decision (the agent approval loop)
+
+### The queue (poll-first — the guaranteed path)
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/orders?requires_approval=true&store_uuid=<store_uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+Each held order already carries everything you need to decide — no extra
+round-trip: `hold_reason`, `total_price`, `cost_total`, `profit_margin`,
+`fulfillment_status` (`on_hold`), and `items[]`.
+
+### The actions
+
+```bash
+# Release the hold and send the order onward (the ApparelHub-side approval)
+curl -sS -X POST ".../agents/v1/orders/<uuid>/approve" -H "x-api-key: $APPARELHUB_API_KEY"
+
+# Flip an existing draft to production (when the order is already a draft)
+curl -sS -X POST ".../agents/v1/orders/<uuid>/confirm" -H "x-api-key: $APPARELHUB_API_KEY"
+
+# Keep it held with a reason / cancel it
+curl -sS -X POST ".../agents/v1/orders/<uuid>/hold"   -H "x-api-key: $APPARELHUB_API_KEY" -d '{"reason":"manual review"}'
+curl -sS -X POST ".../agents/v1/orders/<uuid>/cancel" -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+### ⚠️ There are TWO different "holds" — don't confuse them
+
+| | ApparelHub approval hold | Printful design-approval hold |
+|---|---|---|
+| What | The store's workflow held the order BEFORE it was sent to the manufacturer (review mode / a guardrail trip) | The manufacturer (Printful) paused an order it already accepted (design/address review) |
+| Signal | `fulfillment_status` = `on_hold`, `requires_approval` = true, `hold_reason` set | `fulfillment_substatus` set (e.g. `design_approval_pending`); an entry in `GET /orders/<uuid>/holds` |
+| How to act | `POST /orders/<uuid>/approve` (or `hold` / `cancel`) | `GET /orders/<uuid>/holds` then `POST /orders/<uuid>/holds/<hold_uuid>/approve` or `.../request-changes` |
+
+The approval hold is yours to clear via the workflow. The Printful design hold
+often returns a deep link to resolve on Printful's side — relay it to the
+merchant rather than guessing.
+
+---
+
+## 10. Opt-in callback (so you don't have to poll constantly)
+
+Set an `agent_callback_url` (https) in the store settings and you get a signing
+secret back **once** (`agent_callback_secret` in the PATCH response — store it;
+it is never shown again). After that, when an order is held for an
+`agent`/`rules` store we POST an `order.awaiting_approval` event to your URL:
+
+- Header `X-ApparelHub-Event: order.awaiting_approval`
+- Header `X-ApparelHub-Signature: sha256=<hex>` where `<hex>` is
+  `HMAC-SHA256(secret, raw_request_body)`.
+
+Verify before trusting it:
+
+```python
+import hmac, hashlib
+expected = 'sha256=' + hmac.new(secret.encode(), raw_body, hashlib.sha256).hexdigest()
+assert hmac.compare_digest(expected, request.headers['X-ApparelHub-Signature'])
+```
+
+The body carries the order summary + `actions` (relative approve/confirm/hold/
+cancel paths). Delivery is best-effort: **polling the queue in section 9 is the
+guaranteed path**, so a missed callback is just a missed nudge, never lost work.
