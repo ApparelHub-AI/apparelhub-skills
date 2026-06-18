@@ -1,6 +1,8 @@
-# Embroidery — Printful Embroidered Apparel
+# Embroidery — Printful & Printify Embroidered Apparel
 
 Embroidered apparel (Champion Anorak, polos, embroidered hats, jackets) has hard constraints that DO NOT exist for standard printing. Skip this guide and your sync call hard-400s from Printful with an opaque error message. Read this BEFORE constructing any embroidery sync payload.
+
+**This guide covers BOTH providers.** Sections 1–10 are **Printful**, which requires explicit thread-color options at sync time. The **PRINTIFY EMBROIDERY** section at the bottom covers Printify, which **auto-digitizes and needs NO thread colors** — but has its own rules and a sharp dual-decoration mockup gotcha. The 15-color thread palette is **IDENTICAL across both providers (same hex values)**, so one palette-aligned design works on either.
 
 ---
 
@@ -190,3 +192,87 @@ This is our first-shipped embroidery product. Use it as a known-working referenc
 ### Complete sync payload (working reference)
 
 See `examples/embroidered-anorak.md` for the full end-to-end walkthrough including design generation, transparency processing, mockup, product create, and the variant-level options shape.
+
+---
+
+# PRINTIFY EMBROIDERY
+
+Printify embroidery differs from Printful in the ONE way that matters most for the sync call: **Printify auto-digitizes — you do NOT send thread colors.** Everything in sections 5–8 above about Printful's `thread_colors_*` options DOES NOT APPLY to Printify. You place the design image on the embroidery position and Printify's Digitizing Team converts it to a stitch file after the order is placed.
+
+## P1. The palette is the SAME 15 colors as Printful (identical hex)
+
+Printify's 15-thread palette uses the EXACT same hex values as Printful — only the names and the Madeira thread codes differ. **A palette-aligned design works on BOTH providers unchanged.**
+
+| Hex | Printify name | Madeira code | (Printful name) |
+|---|---|---|---|
+| `#FFFFFF` | White | 1801 | White |
+| `#000000` | Black | 6800 | Black |
+| `#96A1A8` | Grey | 1718 | Gray |
+| `#333366` | Navy | 1966 | Navy |
+| `#3399FF` | Aqua/Teal | 1695 | Light blue |
+| `#6B5294` | Purple | 1832 | Purple |
+| `#660000` | Maroon | 1784 | Dark red / burgundy |
+| `#CC3333` | Red | 1839 | Red |
+| `#CC3366` | Flamingo | 1910 | Pink |
+| `#E25C27` | Orange | 1987 | Orange |
+| `#FFCC00` | Gold | 1951 | Bright gold |
+| `#A67843` | Old Gold | 1672 | Bronze gold |
+| `#7BA35A` | Kiwi Green | 1848 | Sage green |
+| `#01784E` | Kelly Green | 1751 | Forest green |
+| `#005397` | Royal | 1842 | Royal blue |
+
+## P2. ⚠️ KEY DIFFERENCE: NO thread_colors in the sync — Printify auto-digitizes
+
+Unlike Printful (which 400s without the variant-level `thread_colors_<placement>` option), Printify needs NONE of that. The apparelhub Printify sync just needs the design on the embroidery placement; Printify digitizes it automatically after the order (free, up to 36 hours, manual). So:
+- Do **NOT** send thread colors / options — there is no equivalent field.
+- Still **DESIGN to the 15-color palette** (P1). Off-palette colors get approximated to the nearest thread, not rejected — but you lose control, so map deliberately.
+- Printify caps at **6 colors per design** (Printful's practical cap is ~5). 2–3 is still the sweet spot; a monogram is 1.
+
+## P3. Placement = position code (the `_dtf` suffix is the lever)
+
+Printify selects the decoration method from the placeholder POSITION, not a separate field. **`decoration_method` is READ-ONLY and ignored on create** — the position alone decides. On a dual-decoration blueprint (supports embroidery + DTF):
+- `front_left_chest` / `left_chest` → **EMBROIDERY**
+- `front_left_chest_dtf` → **DTF** (printed, full-color)
+- `front_right_chest` / `front_right_chest_dtf` → right-chest embroidery / DTF
+
+## P4. ⛔ Dual-decoration blueprints generate ONLY embroidery mockups (no DTF preview)
+
+Learned the hard way (2026-06-18, Mercer+Mettle MM1014 / blueprint 1983, provider "Fulfill Engine" 217): when a blueprint's provider does BOTH embroidery and DTF, Printify's product-create auto-generates ONLY the embroidery mockup scene. If you decorate the DTF placement (`front_left_chest_dtf`):
+- It **PRINTS as DTF correctly** (Printify accepts + binds the design — confirmed via the echoed `print_areas`).
+- But the auto-generated mockup renders the **empty embroidery zone's thread-swatch placeholder** — there is NO DTF mockup, and no API parameter to request one (mockup `position` is only a camera angle; `decoration_method` is read-only). Re-fetching the full product after create returns the same 3 embroidery scenes. **Confirmed reproducible in Printify's own web designer**, so it's a platform limitation, not a pipeline bug.
+- **Consequence:** on these blueprints you can only get a usable mockup for the EMBROIDERY decoration. A full-color DTF crest can't be previewed. If your standard requires a photoreal mockup, either embroider it (palette-mapped, accepting embroidery's flat look) or pick a DTF-/DTG-primary garment whose mockups actually render the print.
+
+## P5. Design rules (from Printify's embroidery guide)
+
+- **No gradients, no photographs, no ultra-fine detail.** Bold, solid colors with clear separation. Gradients/photos digitize to mush.
+- **Min line thickness 0.05" (1.27mm); shape thickness 0.05"–0.5" (12.7mm).** Thinner vanishes or blobs.
+- **Text size: lowercase ≥0.25" (6.4mm / 18pt), uppercase ≥0.3" (7.6mm).** Measure at the THINNEST stroke. Anything under 0.18" (4.57mm) is auto-resized or REMOVED by Printify.
+- **Resolution:** PNG (transparent bg) or JPEG, ≥1200×1200 px @ 300dpi for apparel, ≥1200×720 for hats.
+- **Transparent background = no stitching there** (bare fabric shows). Same as Printful + the standard pipeline.
+- **Negative-space warning:** digitization may FILL small gaps / enclosed spaces. Use a transparent bg OR pre-fill small gaps yourself with a complementing color so they aren't auto-filled wrong.
+- **Outline/border for solid-background designs, flags, or bold shapes:** stabilizes edges and prevents fuzzy gaps. Printify's Digitizing Team may REQUIRE it case-by-case; if a needed border isn't pre-approved by the merchant, the order can be **DELAYED or CANCELLED**. Add a clean outline where a solid fill meets the garment.
+
+## P6. Embroidery areas (Printify)
+
+| Placement | Area | Notes |
+|---|---|---|
+| Left / center chest | 4 × 4 in (101.6mm) | small logos, crests, monograms |
+| Wrist / sleeve | 2 × 3 in (50.8×76.2mm) | initials, small badges, vertical motifs |
+| Top-left chest (denim jackets) | 3 × 3 in (76.2mm) | mind detail density — small zone |
+| Caps (front) | 4 × 2.25 in (101.6×57.15mm) | centered logo / short text; 1200×720 @300dpi |
+| Beanies (front) | 5 × 1.75 in (127×44.45mm) | bold horizontal text |
+| Bucket hats (front) | 5.5 × 2 in (139.7×50.8mm) | simple horizontal graphics |
+| Large area (select jackets/hoodies/sweatshirts) | 10 × 6 in (254×152.4mm) | appears as an extra option in Product Creator |
+
+Standard apparel embroidery render: 1200×1200 px @ 300dpi. Always preview the mockup per garment — position/scale shifts with garment style.
+
+## P7. Digitization timing + pre-digitized fonts
+
+- **Digitization is a separate, post-order step** — up to **36 hours**, manual. The order can't go to production until it completes. Factor this into fulfillment-time expectations.
+- **Manual process → re-uploading a visually-similar design can stitch differently** (different specialist, different stitch direction). Don't assume two near-identical uploads look identical stitched.
+- **Embroidery Ready Fonts (pre-digitized):** TEXT designs built with Printify's built-in text editor / pre-digitized fonts **skip the 36h digitization** and go straight to production. Uploaded images, logos, or curved text STILL require digitization. Printify-exclusive — use it for monogram/name products to cut fulfillment time and avoid digitization-failure cancellations.
+- **Personalized embroidery** (customer-supplied text): Automated Personalization on Etsy / Pop-Up Store / TikTok Shop (auto-paused for merchant review); Manual Personalization on other channels (edit + approve each order). Text-only today; no image uploads.
+
+## P8. Always order a sample
+
+Embroidery is more intricate than printing — order a physical sample to confirm clean stitching, accurate palette mapping, and legible text before selling.
