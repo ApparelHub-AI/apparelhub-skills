@@ -130,6 +130,10 @@ Look for `ORDER_CREATED` and `ORDER_CONFIRMED` rows in the order's audit log:
 
 If `ORDER_CREATED` exists but `ORDER_CONFIRMED` doesn't, the order is stuck in draft on the provider's side — usually because `auto_fulfill_on_payment` was off OR the merchant cancelled before confirmation.
 
+### "My storefront shows the order as paid/cancelled/shipped but ApparelHub doesn't (or vice-versa)"
+
+The two drifted — usually a missed webhook. Run a reconcile (section 11): it pulls the latest payment/cancellation from the channel and pushes the latest fulfillment/tracking to it, then tells you exactly what it changed.
+
 ---
 
 ## 8. The configurable fulfillment workflow (read + set it)
@@ -239,3 +243,57 @@ assert hmac.compare_digest(expected, request.headers['X-ApparelHub-Signature'])
 The body carries the order summary + `actions` (relative approve/confirm/hold/
 cancel paths). Delivery is best-effort: **polling the queue in section 9 is the
 guaranteed path**, so a missed callback is just a missed nudge, never lost work.
+
+---
+
+## 11. Reconcile a sales-channel order with its channel
+
+When a **sales-channel order** (Shopify / WooCommerce / Wix / TikTok Shop) drifts
+out of sync with the channel it came from — a missed webhook, a status that
+changed on only one side — reconcile it:
+
+```bash
+ah_curl POST /orders/<order_uuid>/reconcile
+```
+
+This applies only to orders that **originated from a connected store** (the order
+has an `ecommerce_provider_name`). Native ApparelHub orders (built in the app /
+manual) have no channel to reconcile against — the call returns
+`reconcilable: false` and changes nothing, and you should not offer it for them.
+
+It uses a **field-aware direction model** (the channel owns money, ApparelHub +
+the fulfillment provider own production):
+
+| Concern | Direction |
+|---|---|
+| Payment paid / refunded | **Pull** from the channel (it's authoritative) |
+| Order cancellation | **Pull** from the channel |
+| Fulfillment status + shipment tracking | **Push** to the channel |
+
+It pulls **fresh** data from the channel on every call (no stale cache). The
+response is a structured summary — it never throws for the normal skip cases:
+
+```json
+{
+  "reconcilable": true,
+  "provider": "Shopify",
+  "applied_count": 1,
+  "changes": [
+    {"field": "payment_status", "direction": "pull", "from": "pending", "to": "paid", "applied": true}
+  ],
+  "errors": []
+}
+```
+
+- `reason` (when `applied_count` is 0 and nothing ran): `not_a_sales_channel_order`,
+  `integration_inactive`, or `integration_locked`.
+- `errors[]` surfaces real conflicts — e.g. the channel cancelled an order
+  ApparelHub already **shipped** (`phase: "apply_cancel"`). Reconcile never fakes
+  a cancel on a shipped order; it reports the conflict so a human can decide.
+- Every run writes a committed `order_reconciled` audit row, and any applied
+  change adds a "Synced with <channel>" entry to the order timeline.
+
+**Automatic reconcile:** a store owner can turn on `auto_reconcile_orders` (Store
+Settings → Order sync, or `PATCH /store/<uuid>/settings`). When on, a background
+worker reconciles the store's open sales-channel orders on a schedule. The manual
+call above always works regardless of that setting.
