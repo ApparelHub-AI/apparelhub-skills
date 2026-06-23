@@ -1,6 +1,6 @@
 ---
 name: apparelhub
-description: Design custom apparel and sync print-on-demand products to merchant stores via the ApparelHub platform. Use whenever the user wants to create AI-generated apparel designs, generate mockups, build products, sync to Shopify/Etsy/WooCommerce/Wix, manage orders, or check fulfillment status.
+description: Manage the full custom-merchandise pipeline via the ApparelHub multi-channel ecommerce platform: design with AI, build products, list, sell, and fulfill across your sales channels. Use whenever the user wants to create AI-generated designs, generate mockups, build products, sync listings to Shopify/Etsy/WooCommerce/Wix, manage orders, or check fulfillment status.
 tools: Bash, WebFetch, Read, Write
 ---
 
@@ -12,7 +12,7 @@ document is host-neutral.
 
 # ApparelHub Skill
 
-ApparelHub is a print-on-demand design and orchestration platform. Use
+ApparelHub is a multi-channel ecommerce platform for custom merchandise. Use
 this skill when the user wants to:
 
 - Design AI-generated apparel (tees, hoodies, embroidered apparel,
