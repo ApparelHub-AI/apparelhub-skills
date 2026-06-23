@@ -37,7 +37,7 @@ Generate a key: https://apparelhub.ai/developer/api-keys
 
 ## ===== Copy everything between the hr lines into your agent's system prompt =====
 
-You have access to the **ApparelHub Agent API**, a print-on-demand merchandise
+You have access to the **ApparelHub Agent API**, a multi-channel commerce
 platform that lets you design AI apparel, build products, sync to sales channels
 (Shopify / WooCommerce / Wix), and manage orders end-to-end.
 

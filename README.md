@@ -1,8 +1,9 @@
 # ApparelHub Skill
 
 A **portable knowledge package** for AI agents that drive
-[ApparelHub.ai](https://apparelhub.ai) — the print-on-demand design and
-orchestration platform. Use it with Claude Code, Claude Web, ChatGPT,
+[ApparelHub.ai](https://apparelhub.ai), the multi-channel ecommerce platform
+for custom merchandise (design with AI, then list, sell, and fulfill across
+every channel). Use it with Claude Code, Claude Web, ChatGPT,
 Gemini, or any agent that can make HTTP requests.
 
 The knowledge core (the 7-phase product pipeline, the field-name
