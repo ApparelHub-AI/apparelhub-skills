@@ -1,0 +1,248 @@
+#!/usr/bin/env python3
+"""
+ah_poll_generation: block until an async image generation finishes
+(processing_status=completed AND a url is present) or fails.
+
+Why this exists: slow image-generation models now run through an async
+pipeline. POST /agents/v1/images/generate returns HTTP 202 with
+{"image_uuid": "...", "processing_status": "pending", ...no url yet...}
+instead of 200-with-image, to dodge the ~29s gateway timeout. The caller
+MUST then poll GET /agents/v1/images/upload/{image_uuid}/status until
+processing_status is `completed` (then read `url`) or `failed` (read
+`error`). Models currently async include Nano Banana (the platform
+default), Seedream 4.0/4.5, Flux 2 Pro, Google Imagen 4, Wan 2.7, and
+GPT Image 2. Fast models (OpenAI, Grok Imagine, Flux 1.1 Pro) still
+return 200-with-image directly and need no polling.
+
+This script encodes the poll loop + transient HTTP retry semantics so
+callers don't hand-roll a multi-line bash loop. It is NOT a
+prompt-suppression wrapper; your runtime SHOULD prompt when it expands
+$APPARELHUB_API_KEY the first time. Approve in context.
+
+Usage:
+    ah_poll_generation <image_uuid>
+                       [--timeout SECONDS]            default 600 (10 min)
+                       [--interval SECONDS]           default 5
+                       [--out PATH]                   default /tmp/generation_status.json
+                       [--max-transient-errors N]     default 5
+
+On success it prints the final `url` on its own last line (so callers can
+capture it) and saves the full status payload to --out.
+
+Exit codes:
+    0: processing_status=completed AND a url is present
+    1: timeout, generation failed, auth error, or too many consecutive
+       transient errors
+    2: APPARELHUB_API_KEY not set, or bad CLI args
+
+Canonical host: https://api.apparelhub.ai is hard-pinned (see
+SECURITY.md §2c). No env-var override. Contributors testing against dev
+should fork and edit the constant below.
+
+Transient error handling: the status endpoint can return HTTP 5xx (most
+commonly 504 from the gateway while the worker is still rendering). These
+are EXPECTED during polling. The script treats HTTP 502/503/504/429 and
+URLError (TCP/DNS/TLS) as transient and keeps polling, up to
+--max-transient-errors consecutive failures (default 5) before bailing.
+The counter resets to 0 on any successful poll. 4xx (other than 429) and
+other 5xx codes are fatal.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+# Hard-pinned canonical host. See SECURITY.md §2c. No env-var override.
+API_BASE = "https://api.apparelhub.ai"
+HUB_HOST = "apparelhub.ai"
+
+
+def fetch_status(image_uuid: str, api_key: str) -> dict:
+    url = f"{API_BASE}/agents/v1/images/upload/{image_uuid}/status"
+    req = urllib.request.Request(url, headers={"x-api-key": api_key})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        body = resp.read().decode("utf-8")
+    return json.loads(body)
+
+
+def extract_status(payload: dict) -> tuple[str, str | None, str | None]:
+    """Return (processing_status, url, error).
+
+    Defensively handles the fields living at top-level OR nested under a
+    `generated_image` / `data` envelope.
+    """
+    def nested(key: str) -> dict:
+        v = payload.get(key)
+        return v if isinstance(v, dict) else {}
+
+    gi = nested("generated_image")
+    data = nested("data")
+
+    status = (
+        payload.get("processing_status")
+        or gi.get("processing_status")
+        or data.get("processing_status")
+        or payload.get("status")
+        or "unknown"
+    )
+    url = payload.get("url") or gi.get("url") or data.get("url")
+    error = payload.get("error") or gi.get("error") or data.get("error")
+    return status, url, error
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(prog="ah_poll_generation", description=__doc__)
+    ap.add_argument("image_uuid")
+    ap.add_argument("--timeout", type=int, default=600)
+    ap.add_argument("--interval", type=int, default=5)
+    ap.add_argument("--out", default="/tmp/generation_status.json")
+    ap.add_argument("--max-transient-errors", type=int, default=5,
+                    help="consecutive transient errors (504/502/503/429/URLError) to "
+                         "tolerate before bailing. Counter resets on any success. "
+                         "Default 5.")
+    args = ap.parse_args()
+
+    api_key = os.environ.get("APPARELHUB_API_KEY")
+    if not api_key:
+        sys.stderr.write(
+            "ah_poll_generation: APPARELHUB_API_KEY not set in environment\n"
+            f"                    Generate one at https://{HUB_HOST}/developer/api-keys\n"
+            "                    Then: export APPARELHUB_API_KEY=<your-key>\n"
+        )
+        return 2
+
+    start = time.monotonic()
+    poll_n = 0
+    last_status: str | None = None
+    transient_errors_in_a_row = 0
+
+    # Transient upstream/gateway codes: the worker is still rendering, retry.
+    TRANSIENT_HTTP_CODES = {502, 503, 504, 429}
+
+    while True:
+        poll_n += 1
+        elapsed = int(time.monotonic() - start)
+        try:
+            payload = fetch_status(args.image_uuid, api_key)
+        except urllib.error.HTTPError as e:
+            if e.code in TRANSIENT_HTTP_CODES:
+                transient_errors_in_a_row += 1
+                if transient_errors_in_a_row > args.max_transient_errors:
+                    sys.stderr.write(
+                        f"ah_poll_generation: {transient_errors_in_a_row} consecutive transient "
+                        f"errors (last was HTTP {e.code}); exceeded --max-transient-errors "
+                        f"{args.max_transient_errors}. Bailing.\n"
+                    )
+                    return 1
+                if elapsed >= args.timeout:
+                    sys.stderr.write(
+                        f"ah_poll_generation: timeout after {args.timeout}s during transient "
+                        f"HTTP {e.code} retry loop.\n"
+                    )
+                    return 1
+                print(
+                    f"poll {poll_n} ({elapsed}s): transient HTTP {e.code} "
+                    f"(retry {transient_errors_in_a_row}/{args.max_transient_errors}, "
+                    f"sleeping {args.interval}s)",
+                    flush=True,
+                )
+                time.sleep(args.interval)
+                continue
+            # Non-transient HTTP error: bail.
+            sys.stderr.write(
+                f"ah_poll_generation: HTTP {e.code} from status endpoint "
+                f"(image_uuid={args.image_uuid})\n"
+            )
+            if e.code in (401, 403):
+                sys.stderr.write(
+                    f"                    Key rejected against {API_BASE}, so make sure the key matches THIS env.\n"
+                    f"                    Verify at https://{HUB_HOST}/developer/api-keys\n"
+                )
+            return 1
+        except urllib.error.URLError as e:
+            # Network-layer failure (DNS, TCP, TLS). Treat as transient.
+            transient_errors_in_a_row += 1
+            if transient_errors_in_a_row > args.max_transient_errors:
+                sys.stderr.write(
+                    f"ah_poll_generation: {transient_errors_in_a_row} consecutive network "
+                    f"failures (last: {e.reason}); exceeded --max-transient-errors "
+                    f"{args.max_transient_errors}. Bailing.\n"
+                )
+                return 1
+            if elapsed >= args.timeout:
+                sys.stderr.write(
+                    f"ah_poll_generation: timeout after {args.timeout}s during network "
+                    f"retry loop ({e.reason}).\n"
+                )
+                return 1
+            print(
+                f"poll {poll_n} ({elapsed}s): network failure ({e.reason}) "
+                f"(retry {transient_errors_in_a_row}/{args.max_transient_errors}, "
+                f"sleeping {args.interval}s)",
+                flush=True,
+            )
+            time.sleep(args.interval)
+            continue
+        except json.JSONDecodeError:
+            sys.stderr.write("ah_poll_generation: non-JSON response from status endpoint\n")
+            return 1
+
+        # Successful response: reset the transient counter
+        transient_errors_in_a_row = 0
+        # Persist on every poll so the agent can inspect partial state.
+        try:
+            with open(args.out, "w") as fh:
+                json.dump(payload, fh, indent=2)
+        except OSError as e:
+            sys.stderr.write(f"ah_poll_generation: could not write --out {args.out}: {e}\n")
+            return 1
+
+        status, url, error = extract_status(payload)
+        last_status = status
+        print(f"poll {poll_n} ({elapsed}s): processing_status={status}", flush=True)
+
+        if status == "failed":
+            sys.stderr.write(
+                f"ah_poll_generation: generation failed"
+                + (f": {error}" if error else "")
+                + "\n"
+            )
+            return 1
+
+        if status == "completed":
+            if not url:
+                # completed but url not yet attached: brief grace re-poll
+                if elapsed >= args.timeout:
+                    sys.stderr.write(
+                        "ah_poll_generation: status=completed but no url present before timeout "
+                        f"(response saved to {args.out})\n"
+                    )
+                    return 1
+                time.sleep(args.interval)
+                continue
+            print(
+                f"ah_poll_generation: done in {elapsed}s, response saved to {args.out}",
+                flush=True,
+            )
+            # Final line = the url, so callers can capture it directly.
+            print(url, flush=True)
+            return 0
+
+        if elapsed >= args.timeout:
+            sys.stderr.write(
+                f"ah_poll_generation: timeout after {args.timeout}s "
+                f"(last processing_status={last_status}, response saved to {args.out})\n"
+            )
+            return 1
+
+        time.sleep(args.interval)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

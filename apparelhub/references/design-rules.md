@@ -98,6 +98,8 @@ When in doubt, default to `Nano Banana` — it's the most consistent across cate
 
 `POST /agents/v1/images/generate` is overloaded. Same endpoint, same auth, but the **request shape** determines whether you're doing text-to-image OR img2img editing.
 
+**Async for slow models (202 + poll), applies to every mode below.** `generate` returns **200 with the image url** for fast models (`OpenAI`, `Grok Imagine`, `Flux 1.1 Pro`), but **202 with an `image_uuid` and `processing_status: pending` (no url yet)** for slow models (the **Nano Banana** default, plus `Seedream 4.0/4.5`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`): the backend routes those through an async pipeline to dodge the ~29s gateway timeout. On a 202, poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (read `url`) or `failed` (read `error`), or just run the packaged `ah_poll_generation <image_uuid>` helper. Nano Banana is the default, so most generations take the 202 path. Full poll contract: `product-creation-pipeline.md` Phase 1.
+
 ### Three modes
 
 | Mode | Use when… | Request shape |

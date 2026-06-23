@@ -35,9 +35,17 @@ fi
 # Hit a lightweight authed endpoint to verify the key works. /store is
 # small and always returns at least the user's default store, so it's a
 # reliable round-trip probe.
+#
+# The key is passed via a curl config read from stdin (--config -) rather
+# than -H on the command line, so the key value never appears in this
+# process's argv (where `ps` / other local processes could read it for the
+# request's duration). The URL stays in argv; it isn't secret.
 HTTP_CODE=$(curl -sS -o /dev/null -w "%{http_code}" \
     "${API_BASE}/agents/v1/store" \
-    -H "x-api-key: $APPARELHUB_API_KEY")
+    --config - <<CURLCFG
+header = "x-api-key: ${APPARELHUB_API_KEY}"
+CURLCFG
+)
 
 case "$HTTP_CODE" in
     200)
