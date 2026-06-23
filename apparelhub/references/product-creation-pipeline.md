@@ -18,7 +18,24 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api
 
 The extra phrasing on the background is deliberate. AI generators routinely ignore "#00FF00" and produce a yellow-green or olive background instead. When that happens, the keying step in Phase 2 will consume warm design elements (yellow suns, gold details) because they fall inside the tolerance window around the actual background color. The `make_transparent.py` script in Phase 2 has a sanity check that rejects non-#00FF00 backgrounds and tells the agent to regenerate — but it's cheaper to get the right background first.
 
-Returns `{ "generated_image": { "uuid": "...", "url": "..." } }`. Save the UUID.
+**Two response shapes (branch on the HTTP status code):**
+
+- **Fast models** (`OpenAI`, `Grok Imagine`, `Flux 1.1 Pro`) return **200** with `{ "generated_image": { "uuid": "...", "url": "..." } }` directly. Save the UUID + url and continue.
+- **Slow models** (the **Nano Banana** default, plus `Seedream 4.0/4.5`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`) run through an async pipeline and return **202** with `{ "image_uuid": "...", "processing_status": "pending", "generated_image": { ...no url yet... } }`. This avoids the ~29s gateway timeout that used to 504 slow generations. You MUST then poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (then read `url`) or `failed` (then read `error`).
+
+Nano Banana is the platform default, so **most generations now take the 202 path.** Use the packaged `ah_poll_generation` script. DO NOT hand-roll a `for` loop with `$(...)` command substitution; the expansion check will prompt on every iteration.
+
+```bash
+# Fast model: url is already in the 200 response, no polling needed.
+# Slow model (202): take image_uuid from the response, then:
+ah_poll_generation <image_uuid>
+# One status line per poll; on success the LAST line printed is the image url.
+# Full status payload saved to /tmp/generation_status.json.
+```
+
+Flags: `--timeout SECONDS` (default 600), `--interval SECONDS` (default 5), `--out PATH` (default `/tmp/generation_status.json`), `--max-transient-errors N` (default 5; tolerates 502/503/504/429/network blips while the worker renders). Exit codes: `0` completed (url present), `1` failed/timeout/too-many-transient, `2` no key or bad args.
+
+Save the resulting image UUID (and url) for the rest of the pipeline.
 
 **Before running Phase 1, READ `references/design-rules.md`.** It covers:
 - AI prompt anti-patterns (e.g., never say "luggage tag" in the prompt for a luggage tag design)

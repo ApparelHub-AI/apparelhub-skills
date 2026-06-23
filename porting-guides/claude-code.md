@@ -99,7 +99,7 @@ Use the bundled image script (canonical-host pin doesn't matter here —
 it's a pure local image operation, no network call):
 
 ```bash
-curl -sS "https://apparelhub-production-user-generated-public-objects.s3.amazonaws.com/<image-path>.png" \
+curl -sS "https://cdn.apparelhub.ai/<image-path>.png" \
   -o /tmp/design_green.png
 
 python3 ~/.claude/skills/apparelhub/scripts/make_transparent.py \

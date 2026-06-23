@@ -88,6 +88,20 @@ curl -sS -o /dev/null -w "%{http_code}\n" \
 
 `200` means the key works. Anything else, fix the key before continuing.
 
+**Local key hygiene on shared machines:** `-H "x-api-key: ..."` puts the
+key value in the process argv, where `ps` (and other local users) can read
+it for the request's duration. On a multi-user box, pass the header via a
+curl config on stdin instead, so the key never reaches argv:
+
+```
+curl -sS https://api.apparelhub.ai/agents/v1/store --config - <<CFG
+header = "x-api-key: $APPARELHUB_API_KEY"
+CFG
+```
+
+The plain `-H` form is fine on a single-user machine. `scripts/ah_check`
+already uses the stdin-config form.
+
 ### The canonical OpenAPI spec
 
 ```
@@ -104,7 +118,7 @@ unsure about a field name or response shape, fetch the spec.
 Going from "user wants a saguaro tee" to "product is live on their
 Shopify store" takes 7 phases. Execute IN ORDER:
 
-1. **Generate the design image.** `POST /images/generate` with a prompt
+1. **Generate the design image.** `POST /images/generate` with a prompt (slow models, including the Nano Banana default, return **202 + `image_uuid`** and must be polled with `ah_poll_generation`; fast models return 200 + `url`)
 2. **LOCAL transparency processing** (your compute, NOT an API call). For
    standard apparel only; SKIP for all-over print
 3. **Generate the mockup.** `POST /merchandise/product/preview`

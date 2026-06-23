@@ -47,6 +47,7 @@ jobs:
           violations=$(grep -lEi 'simple_expansion|expansion-free|allowlist-clean' \
               apparelhub/scripts/ah_check \
               apparelhub/scripts/ah_poll_mockup \
+              apparelhub/scripts/ah_poll_generation \
               apparelhub/scripts/ah_classify_previews \
               apparelhub/scripts/ah_pick_provider_url \
               apparelhub/scripts/ah_pick_dimensions \
@@ -67,6 +68,7 @@ jobs:
           violations=$(grep -lE 'APPARELHUB_API_BASE' \
               apparelhub/scripts/ah_check \
               apparelhub/scripts/ah_poll_mockup \
+              apparelhub/scripts/ah_poll_generation \
               apparelhub/scripts/ah_classify_previews \
               apparelhub/scripts/ah_pick_provider_url \
               apparelhub/scripts/ah_pick_dimensions \
@@ -84,7 +86,7 @@ jobs:
       - name: Helper scripts that make network calls must pin canonical host
         run: |
           set -euo pipefail
-          for script in apparelhub/scripts/ah_check apparelhub/scripts/ah_poll_mockup; do
+          for script in apparelhub/scripts/ah_check apparelhub/scripts/ah_poll_mockup apparelhub/scripts/ah_poll_generation; do
             if [ ! -e "$script" ]; then
               continue
             fi
