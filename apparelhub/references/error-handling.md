@@ -55,6 +55,32 @@ A product with this exact name + provider already exists for this user. Either r
 
 ---
 
+## 2b. Workspace scoping errors (enterprise / agency accounts)
+
+On Enterprise accounts each request acts within an active workspace, and the `?workspace=<uuid>` selector is validated. Most accounts have one Default workspace and never see these.
+
+### `workspace_not_found` (404)
+
+The `?workspace=` uuid doesn't resolve to any workspace.
+
+**Fix**: correct the uuid, or omit the param (calls default to the account's Default workspace). There's no agent endpoint that lists workspaces — get the uuid from an asset's `workspaces` field or the web UI (Account → Team & Workspaces).
+
+### `workspace_forbidden` (403)
+
+The workspace exists but this key/user may not act in it. Either the user isn't assigned to it, or a **workspace-scoped key** was pointed at a different workspace than the one it's pinned to.
+
+**Fix**: target a workspace the caller can access. Don't retry with the same `?workspace=`.
+
+### `forbidden` with a `capability` field (403)
+
+A workspace-scoped key's role doesn't permit this action (e.g. `{"error":"forbidden","capability":"design.generate"}` on `POST /images/generate`). The account owner controls the key's role.
+
+**Fix**: surface it; don't retry. Use an account-wide key or a key whose role holds the capability.
+
+**A bad `?workspace=` fails the whole request** — there's no partial result. And a scoped list returning a SUBSET is not an error: see `references/workspaces.md` ("don't misread a scoped list as missing data").
+
+---
+
 ## 3. Sync failures — the silent class
 
 The most common "I thought I synced this but customers don't see it" issues:

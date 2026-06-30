@@ -160,6 +160,7 @@ reference up front saves you from shipping a broken product.
 | Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
 | **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
+| **Enterprise / agency account** (multiple workspaces; a list looks like it's "missing" stores/products/designs, or you need to target a specific client workspace) | `references/workspaces.md` covers the `?workspace=` param, the `workspaces` visibility field, 403/404 handling, and workspace-scoped keys |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and
 sync it"), the `examples/` directory has working walkthroughs you can
@@ -242,9 +243,43 @@ GET https://api.apparelhub.ai/agents/v1/orders/<uuid>
 For order data interpretation (payment status, fulfillment status, who
 actually charged the card), see `references/orders-and-fulfillment.md`.
 
+On an **Enterprise (agency) account**, every list/get above is scoped to one
+**active workspace** (the Default workspace unless you pass `?workspace=<uuid>`).
+If a list looks like it's missing stores/products/designs, you're probably
+scoped to a different workspace, not missing data. See section 6.
+
 ---
 
-## 6. When NOT to use this skill
+## 6. Workspaces (enterprise accounts)
+
+Most accounts have a single workspace and can ignore this. On **Enterprise
+(agency) accounts** the account is split into isolated client / brand
+**workspaces**, and every Agent API call acts within ONE of them.
+
+- **Default scope.** With no `?workspace=` param, calls act in the account's
+  **Default** workspace.
+- **Target a workspace.** Add `?workspace=<workspace_uuid>` to any list / get /
+  create call (combines with `?limit=`, `?fields=`, etc.).
+- **A bad workspace fails the whole call** (no silent fallback): an unknown
+  uuid returns `404 workspace_not_found`; a real-but-inaccessible workspace
+  returns `403 workspace_forbidden`.
+- **Don't misread a subset as missing data.** A scoped list shows that
+  workspace's assets, not the whole account. Products and generated images
+  carry a `workspaces` array (every workspace they belong to); stores carry
+  `workspace_uuid` / `workspace_name`. Check those before reporting "nothing
+  there," then re-issue with the right `?workspace=`.
+- **Workspace-scoped keys.** An API key can be pinned to one workspace + role
+  in the web UI. It rejects a different `?workspace=` with `403
+  workspace_forbidden`, and a role lacking design-generation gets `403
+  forbidden` (`capability: design.generate`) on `POST /images/generate`.
+
+Full contract (param, error bodies, Model A visibility, scoped keys, worked
+curls) is in **`references/workspaces.md`**. Single-workspace and
+non-Enterprise accounts are unaffected.
+
+---
+
+## 7. When NOT to use this skill
 
 - **The user wants to BUY a finished product.** ApparelHub is for
   merchants designing + selling, not end-shoppers. Direct them to the
@@ -260,7 +295,7 @@ actually charged the card), see `references/orders-and-fulfillment.md`.
 
 ---
 
-## 7. Reporting back to the user
+## 8. Reporting back to the user
 
 After completing a workflow, give a tight summary:
 

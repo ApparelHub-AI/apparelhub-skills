@@ -287,6 +287,37 @@ Swagger viewer.
 
 ---
 
+## 4b. Workspace scoping (enterprise accounts)
+
+On Enterprise (agency) accounts the account is divided into isolated
+**workspaces**, and every request acts within ONE active workspace. Most
+accounts have a single Default workspace and can ignore this.
+
+- **Active workspace.** No param means the account's **Default** workspace.
+  `?workspace=<workspace_uuid>` on any list / get / create call targets a
+  specific one (combines with `?limit=`, `?fields=`, etc.).
+- **A bad `?workspace=` fails the whole request** (no silent fallback): an
+  unknown uuid returns `404 {"error":"workspace_not_found"}`; a
+  real-but-inaccessible workspace returns `403 {"error":"workspace_forbidden"}`.
+- **Response fields tell you where an asset lives (Model A).** Products and
+  generated images carry a `workspaces` array
+  (`[{"uuid","name","is_default"}, ...]`) — every workspace the asset belongs to
+  (via store association, or its home workspace if storeless). Stores carry
+  single `workspace_uuid` / `workspace_name` / `workspace_is_default`.
+- **Workspace-scoped keys.** A key can be pinned to one workspace + role; it
+  rejects a different `?workspace=` (`403 workspace_forbidden`) and a role
+  lacking a capability returns
+  `403 {"error":"forbidden","capability":"design.generate"}` on image generation.
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/store?workspace=<workspace_uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+Full detail (Model A visibility, scoped keys, worked curls): `references/workspaces.md`.
+
+---
+
 ## 5. Status-code semantics
 
 | Code | Meaning | Action |
@@ -294,8 +325,8 @@ Swagger viewer.
 | 200 / 201 / 204 | Success | Parse the body if present. |
 | 400 | Malformed request | The body usually names the offending field. Common cause: wrong field name (see §4 gotchas). |
 | 401 | Missing or invalid API key | Verify the key, check the environment scoping. Don't retry without fixing. |
-| 403 | Key present but lacks scope (e.g., USER key hitting `/admin/*`) | Tell the user; do not retry with a different key. |
-| 404 | Resource doesn't exist | Verify the UUID. May indicate a race with a delete from another session. |
+| 403 | Key present but lacks scope (e.g., USER key hitting `/admin/*`); `workspace_forbidden` (targeting a workspace this key/user can't act in); `forbidden` + `capability` (a workspace-scoped key's role lacks the op) | Tell the user; do not retry with a different key or workspace. |
+| 404 | Resource doesn't exist; `workspace_not_found` (a bad `?workspace=` uuid — see §4b) | Verify the UUID. May indicate a race with a delete from another session. |
 | 409 | Conflict (e.g., `shopify_auth_revoked`, `order_linked_to_sales_channel`, `sales_channel_uniqueness`) | The body explains. Do not bulldoze; surface to the user. |
 | 422 | Semantic rejection (e.g., Replicate-backed source on the edit endpoint) | The body names the constraint. |
 | 429 | Rate limited | Back off (exponential, ≥1s) and retry. |

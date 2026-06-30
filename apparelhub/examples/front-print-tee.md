@@ -7,6 +7,7 @@ This is the canonical reference example. Adapt for other front-print apparel (ho
 **Invocation convention used throughout this file:**
 - All Agent API calls are shown as plain `curl https://api.apparelhub.ai/agents/v1/...` invocations. Use any HTTP client equivalently — the canonical host is hard-pinned (see `../../SECURITY.md`).
 - Placeholders like `<image_uuid>`, `<job_uuid>`, `<product_uuid>` — when you see these, substitute the value the previous step returned. Whether you do that via shell variables, inline substitution, or your tool-calling agent's reasoning context is up to your runtime.
+- **Enterprise / agency accounts:** every call below acts within your active workspace. Append `?workspace=<workspace_uuid>` to any of them to target a specific client workspace (and handle `404 workspace_not_found` / `403 workspace_forbidden`). See `../references/workspaces.md`. Single-workspace accounts can ignore this.
 
 ---
 
