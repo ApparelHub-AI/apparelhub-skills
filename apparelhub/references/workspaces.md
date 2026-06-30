@@ -41,7 +41,7 @@ curl -sS "https://api.apparelhub.ai/agents/v1/workspaces" \
     {"uuid": "…", "name": "Acme Co", "is_default": false}
   ],
   "active_workspace": {"uuid": "…", "name": "Default", "is_default": true},
-  "key_scope": {"pinned": false, "workspace_uuid": null, "role": null}
+  "key_scope": {"pinned": false, "workspaces": []}
 }
 ```
 
@@ -50,9 +50,12 @@ curl -sS "https://api.apparelhub.ai/agents/v1/workspaces" \
   exist rather than guessing).
 - `active_workspace` — the workspace your calls hit right now when you pass no
   `?workspace=` (the Default unless you scope otherwise).
-- `key_scope.pinned` — `true` means this key is locked to one workspace
-  (`workspace_uuid`); a pinned key lists only that workspace and rejects a
-  different `?workspace=` (section 5).
+- `key_scope` — `pinned: true` means this key is scoped to specific
+  workspace(s): `key_scope.workspaces` is `[{workspace_uuid, role}]`, one entry
+  per workspace the key may act in (with the key's role there). A scoped key
+  lists ONLY those workspaces and rejects any other `?workspace=` (section 5).
+  `pinned: false` with an empty `workspaces` array means an account-wide key (no
+  restriction).
 
 **Then target a workspace** by appending `?workspace=<workspace_uuid>` to any
 list / get / create call. It combines with other query params (`?limit=`,
@@ -138,28 +141,31 @@ Switch with `?workspace=` to act on it.
 
 ## 5. Workspace-scoped agent keys
 
-An Agent API key can be **pinned to a single workspace** (with a workspace
-role) when it's created in the web UI (Developer → API Keys). The key string
-looks no different; you infer the scope from behavior.
+An Agent API key can be **scoped to one OR MORE workspaces** (each with a
+workspace role) when it's created or edited in the web UI (Developer → API
+Keys). The key string looks no different; infer the scope from behavior, or read
+it from `key_scope.workspaces` on `GET /agents/v1/workspaces` (section 2).
 
 For a workspace-scoped key:
 
-- **It's locked to its workspace.** Omitting `?workspace=` uses the key's
-  workspace. Passing `?workspace=<a-different-workspace>` returns
-  **403 `workspace_forbidden`**.
-- **Its role gates capabilities.** A role without design-generation rights
-  returns **403** on `POST /images/generate`:
+- **It's locked to its workspace(s).** Omitting `?workspace=` uses the key's
+  home workspace. `?workspace=<any of its scoped workspaces>` works; passing any
+  OTHER workspace returns **403 `workspace_forbidden`**. `GET /agents/v1/workspaces`
+  lists exactly the workspaces the key can act in, each with the key's role.
+- **Its role gates capabilities** (per workspace). A role without
+  design-generation rights returns **403** on `POST /images/generate`:
 
   ```json
   {"error": "forbidden", "capability": "design.generate",
    "message": "This key's workspace role does not permit this action."}
   ```
 
-  Don't retry — surface it. The account owner controls the key's role and
-  workspace in the web UI.
+  Don't retry — surface it. The account owner controls the key's workspaces and
+  role in the web UI.
 
-- **Account-wide keys** (the default) are not pinned and can target any
-  workspace the user can access via `?workspace=`.
+- **Account-wide keys** (the default, including every key created before
+  workspace scoping) are not scoped and can target any workspace the user can
+  access via `?workspace=`.
 
 ## 6. Single-workspace / non-Enterprise accounts
 

@@ -272,10 +272,12 @@ Most accounts have a single workspace and can ignore this. On **Enterprise
   carry a `workspaces` array (every workspace they belong to); stores carry
   `workspace_uuid` / `workspace_name`. Check those before reporting "nothing
   there," then re-issue with the right `?workspace=`.
-- **Workspace-scoped keys.** An API key can be pinned to one workspace + role
-  in the web UI. It rejects a different `?workspace=` with `403
-  workspace_forbidden`, and a role lacking design-generation gets `403
+- **Workspace-scoped keys.** An API key can be scoped to one OR MORE workspaces
+  (each with a role) in the web UI. It rejects any `?workspace=` outside that set
+  with `403 workspace_forbidden`, and a role lacking design-generation gets `403
   forbidden` (`capability: design.generate`) on `POST /images/generate`.
+  `GET /agents/v1/workspaces` returns the key's scope in
+  `key_scope.workspaces` (`[{workspace_uuid, role}]`).
 
 Full contract (param, error bodies, Model A visibility, scoped keys, worked
 curls) is in **`references/workspaces.md`**. Single-workspace and

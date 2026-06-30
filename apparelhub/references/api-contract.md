@@ -296,7 +296,8 @@ accounts have a single Default workspace and can ignore this.
 - **Discover workspaces.** `GET /agents/v1/workspaces` →
   `{workspaces:[{uuid,name,is_default}], active_workspace, key_scope}`. Resolve a
   workspace name → uuid here (the user names a client, e.g. "Acme Co"; you need its uuid),
-  then scope with `?workspace=`. A pinned key lists only its own workspace.
+  then scope with `?workspace=`. A scoped key lists only its scoped workspace(s),
+  each with the key's role, in `key_scope.workspaces` (`[{workspace_uuid, role}]`).
 - **Active workspace.** No param means the account's **Default** workspace.
   `?workspace=<workspace_uuid>` on any list / get / create call targets a
   specific one (combines with `?limit=`, `?fields=`, etc.).
@@ -308,9 +309,9 @@ accounts have a single Default workspace and can ignore this.
   (`[{"uuid","name","is_default"}, ...]`) — every workspace the asset belongs to
   (via store association, or its home workspace if storeless). Stores carry
   single `workspace_uuid` / `workspace_name` / `workspace_is_default`.
-- **Workspace-scoped keys.** A key can be pinned to one workspace + role; it
-  rejects a different `?workspace=` (`403 workspace_forbidden`) and a role
-  lacking a capability returns
+- **Workspace-scoped keys.** A key can be scoped to one OR MORE workspaces (each
+  with a role); it rejects any `?workspace=` outside that set
+  (`403 workspace_forbidden`) and a role lacking a capability returns
   `403 {"error":"forbidden","capability":"design.generate"}` on image generation.
 
 ```bash

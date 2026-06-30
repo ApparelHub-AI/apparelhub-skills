@@ -68,7 +68,7 @@ The `?workspace=` uuid doesn't resolve to any workspace.
 
 ### `workspace_forbidden` (403)
 
-The workspace exists but this key/user may not act in it. Either the user isn't assigned to it, or a **workspace-scoped key** was pointed at a different workspace than the one it's pinned to.
+The workspace exists but this key/user may not act in it. Either the user isn't assigned to it, or a **workspace-scoped key** was pointed at a workspace outside the one(s) it's scoped to.
 
 **Fix**: target a workspace the caller can access. Don't retry with the same `?workspace=`.
 
