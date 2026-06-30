@@ -122,7 +122,7 @@ Steps:
    inline).
 3. Register the `apparelhub_request` function with the agent.
 4. Ask the agent: *"Design a saguaro sunset tee and add it to my
-   Merctech Apparel store. Black, navy, and white in S–2XL. Don't sync
+   Acme Apparel store. Black, navy, and white in S–2XL. Don't sync
    to Shopify."*
 5. Let the agent drive the flow via function calls.
 
@@ -226,7 +226,7 @@ Every full playbook run gets a one-line entry in this file's bottom log:
 ```
 | Date | Tag | Operator | Platforms run | Result | Notes |
 |------|-----|----------|---------------|--------|-------|
-| 2026-06-06 | pre-v2.0 | Claude+Tony | A, B, C | PASS | initial v2.0 acceptance |
+| 2026-06-06 | pre-v2.0 | Claude+maintainer | A, B, C | PASS | initial v2.0 acceptance |
 ```
 
 If anything fails, file an issue, fix, re-run the affected platform,

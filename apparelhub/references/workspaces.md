@@ -23,17 +23,47 @@ List/get results are scoped to that active workspace. So before you tell a
 user "you have no products / no stores," confirm you're looking at the right
 workspace. A subset is almost never missing data — it's a different scope.
 
-## 2. Targeting a workspace
+## 2. Discover workspaces, then target one
 
-Append `?workspace=<workspace_uuid>` to any list / get / create call. It
-combines with other query params (`?limit=`, `?fields=`, etc.):
+**List the account's workspaces** with `GET /agents/v1/workspaces`. This is how
+you turn a workspace *name* the user mentions ("the Acme Co client") into
+the `uuid` you scope with — do this first whenever the user names a workspace:
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/workspaces" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+```json
+{
+  "workspaces": [
+    {"uuid": "…", "name": "Default",      "is_default": true},
+    {"uuid": "…", "name": "Acme Co", "is_default": false}
+  ],
+  "active_workspace": {"uuid": "…", "name": "Default", "is_default": true},
+  "key_scope": {"pinned": false, "workspace_uuid": null, "role": null}
+}
+```
+
+- `workspaces` — every workspace this key can act in. Match the user's name to a
+  `uuid` (case-insensitively; if nothing matches, tell the user what *does*
+  exist rather than guessing).
+- `active_workspace` — the workspace your calls hit right now when you pass no
+  `?workspace=` (the Default unless you scope otherwise).
+- `key_scope.pinned` — `true` means this key is locked to one workspace
+  (`workspace_uuid`); a pinned key lists only that workspace and rejects a
+  different `?workspace=` (section 5).
+
+**Then target a workspace** by appending `?workspace=<workspace_uuid>` to any
+list / get / create call. It combines with other query params (`?limit=`,
+`?fields=`, etc.):
 
 ```bash
 # Default workspace (no param)
 curl -sS "https://api.apparelhub.ai/agents/v1/store" \
   -H "x-api-key: $APPARELHUB_API_KEY"
 
-# A specific client workspace
+# A specific client workspace (uuid from GET /agents/v1/workspaces above)
 curl -sS "https://api.apparelhub.ai/agents/v1/store?workspace=<workspace_uuid>" \
   -H "x-api-key: $APPARELHUB_API_KEY"
 
@@ -41,10 +71,9 @@ curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?workspace=<worksp
   -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
-There's no agent endpoint that lists an account's workspaces, so when the user
-talks about a workspace by name ("the Crystal Riley client"), get the uuid
-from the `workspaces` field on an asset you already have (section 4) or from
-the web UI at `https://apparelhub.ai/team` (Team & Workspaces).
+You can also read a workspace uuid off the `workspaces` field of an asset you
+already have (section 4) or from the web UI at `https://apparelhub.ai/team`
+(Team & Workspaces), but `GET /agents/v1/workspaces` is the direct way.
 
 ### Errors — a bad `?workspace=` fails the WHOLE request
 
@@ -86,7 +115,7 @@ Responses tell you, so you never have to guess.
 
   ```json
   "workspaces": [
-    {"uuid": "…", "name": "Crystal Riley", "is_default": false},
+    {"uuid": "…", "name": "Acme Co", "is_default": false},
     {"uuid": "…", "name": "Default",       "is_default": true}
   ]
   ```
@@ -100,10 +129,10 @@ Responses tell you, so you never have to guess.
   than an array:
 
   ```json
-  "workspace_uuid": "…", "workspace_name": "Crystal Riley", "workspace_is_default": false
+  "workspace_uuid": "…", "workspace_name": "Acme Co", "workspace_is_default": false
   ```
 
-Practical use: a product whose `workspaces` is `[{"name": "Crystal Riley"}]`
+Practical use: a product whose `workspaces` is `[{"name": "Acme Co"}]`
 won't appear when the active workspace is Default — that's correct, not a bug.
 Switch with `?workspace=` to act on it.
 

@@ -293,6 +293,10 @@ On Enterprise (agency) accounts the account is divided into isolated
 **workspaces**, and every request acts within ONE active workspace. Most
 accounts have a single Default workspace and can ignore this.
 
+- **Discover workspaces.** `GET /agents/v1/workspaces` →
+  `{workspaces:[{uuid,name,is_default}], active_workspace, key_scope}`. Resolve a
+  workspace name → uuid here (the user names a client, e.g. "Acme Co"; you need its uuid),
+  then scope with `?workspace=`. A pinned key lists only its own workspace.
 - **Active workspace.** No param means the account's **Default** workspace.
   `?workspace=<workspace_uuid>` on any list / get / create call targets a
   specific one (combines with `?limit=`, `?fields=`, etc.).

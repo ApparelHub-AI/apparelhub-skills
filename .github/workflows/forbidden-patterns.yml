@@ -112,5 +112,26 @@ jobs:
             fi
           fi
 
+      - name: No real account-specific data (UUIDs or known real names)
+        run: |
+          set -euo pipefail
+          # This is a PUBLIC repo: examples + docs must use generic placeholders,
+          # never a real customer's account values. Exclude .git and .github
+          # (this workflow itself names the forbidden tokens). See the repo's
+          # operating rules: "never any REAL names, UUIDs, or account resources."
+          # 1) No full UUIDs anywhere — use <printful_provider_uuid> / <workspace_uuid> / … instead.
+          uuids=$(grep -rinoE '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}' . \
+              --exclude-dir=.git --exclude-dir=.github 2>/dev/null || true)
+          # 2) No known real account names / connected-store hostnames.
+          names=$(grep -rinE 'crystal riley|merctech|nyholm|cat lady|apparelhubai\.myshopify\.com|wp\.merctech\.io' . \
+              --exclude-dir=.git --exclude-dir=.github 2>/dev/null || true)
+          if [ -n "$uuids" ] || [ -n "$names" ]; then
+            echo "ERROR: real account-specific data found in a public file." >&2
+            echo "       Use generic placeholders: <printful_provider_uuid>, <workspace_uuid>, 'Acme Co', your-store.myshopify.com." >&2
+            [ -n "$uuids" ] && { echo "--- UUIDs ---" >&2; echo "$uuids" >&2; }
+            [ -n "$names" ] && { echo "--- names/hosts ---" >&2; echo "$names" >&2; }
+            exit 1
+          fi
+
       - name: Smoke summary
         run: echo "All forbidden-pattern checks passed."

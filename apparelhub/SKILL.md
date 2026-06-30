@@ -160,7 +160,7 @@ reference up front saves you from shipping a broken product.
 | Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
 | **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
-| **Enterprise / agency account** (multiple workspaces; a list looks like it's "missing" stores/products/designs, or you need to target a specific client workspace) | `references/workspaces.md` covers the `?workspace=` param, the `workspaces` visibility field, 403/404 handling, and workspace-scoped keys |
+| **Enterprise / agency account** (multiple workspaces; a list looks like it's "missing" stores/products/designs, or you need to target a specific client workspace) | `references/workspaces.md` covers the `GET /agents/v1/workspaces` discovery route, the `?workspace=` param, the `workspaces` visibility field, 403/404 handling, and workspace-scoped keys |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and
 sync it"), the `examples/` directory has working walkthroughs you can
@@ -256,6 +256,10 @@ Most accounts have a single workspace and can ignore this. On **Enterprise
 (agency) accounts** the account is split into isolated client / brand
 **workspaces**, and every Agent API call acts within ONE of them.
 
+- **Discover them.** `GET /agents/v1/workspaces` lists the workspaces this key
+  can act in (`uuid` + `name` + `is_default`), the active workspace, and whether
+  the key is pinned. Use it to turn a workspace name the user mentions into the
+  `uuid` you scope with — do this first whenever the user names a workspace.
 - **Default scope.** With no `?workspace=` param, calls act in the account's
   **Default** workspace.
 - **Target a workspace.** Add `?workspace=<workspace_uuid>` to any list / get /

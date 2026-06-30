@@ -36,7 +36,7 @@ curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/audit-log?actio
 
 ### `sales_channel_uniqueness_violation`
 
-The shop URL is already connected to a DIFFERENT user's account in the same environment. Each storefront (`apparelhubai.myshopify.com`, `wp.merctech.io`, etc.) can be connected to exactly one ApparelHub user.
+The shop URL is already connected to a DIFFERENT user's account in the same environment. Each storefront (`your-store.myshopify.com`, `shop.example.com`, etc.) can be connected to exactly one ApparelHub user.
 
 **What to tell the user:**
 > "Your [Shopify/WC/Wix] store is already connected to another ApparelHub account. If that's also you, disconnect it from the other account first. If not, you'll need to use a different storefront."

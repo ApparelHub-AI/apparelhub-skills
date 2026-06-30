@@ -86,12 +86,12 @@ Response shape:
 
 For Bella+Canvas 3001 (Printful product 71), standard chest-filling front print across Black + Heather Midnight Navy + White.
 
-Printful's prod provider UUID is `c8dff2fa-1a43-4734-93f0-e2ddd03eae53`.
+Get your Printful provider UUID from `GET /agents/v1/merchandise` (it's per-account; shown here as `<printful_provider_uuid>`).
 
 Verify the print template dimensions first (don't hardcode):
 
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/71" -H "x-api-key: $APPARELHUB_API_KEY"
+curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<printful_provider_uuid>/product/71" -H "x-api-key: $APPARELHUB_API_KEY"
 # Look at print_templates for the "front" placement.
 # Expect: area_width=728, area_height=376
 ```
@@ -117,7 +117,7 @@ Create the preview with ALL 15 variant IDs in one call. Substitute the LITERAL v
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
-  "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "merchandise_provider_uuid": "<printful_provider_uuid>",
   "generated_image_uuid": "xyz-789-trans",
   "provider_product_ref_id": "71",
   "templates": [
@@ -144,7 +144,7 @@ Wait for the job to finish AND for `preview_url` ingestion in ONE call via the p
 
 ```bash
 # Substitute literal job UUID. Default polls every 8s, 30-minute timeout.
-ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
+ah_poll_mockup <printful_provider_uuid> <job_uuid>
 ```
 
 The script handles BOTH completion phases (provider render finish + our S3 ingestion catching up) and writes the final response to `/tmp/preview_job.json`. Do NOT write an inline `for` loop with `$(...)` substitution — that trips the expansion check on every iteration.
@@ -193,7 +193,7 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-
   "description": "Hand-illustrated saguaro silhouette against a warm desert sunset.",
   "generated_image_uuid": "xyz-789-trans",
   "preview_job_uuid": "<job_uuid>",
-  "provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "provider_uuid": "<printful_provider_uuid>",
   "product_ref_id": "71",
   "price": 27.99,
   "display_image": "https://.../unisex-staple-t-shirt-black-front-...png",
