@@ -16,7 +16,7 @@ A complete walkthrough for the Champion Packable Anorak (Printful product 399) w
 export APPARELHUB_API_KEY=ah_...   # one-time
 ```
 
-Printful prod provider UUID: `c8dff2fa-1a43-4734-93f0-e2ddd03eae53`
+Printful provider UUID (per-account; get yours from `GET /agents/v1/merchandise`): `<printful_provider_uuid>`
 Champion Packable Anorak product_ref_id: `399`
 
 ---
@@ -119,7 +119,7 @@ For our forest-green-and-gold crest, expected mapping:
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
-  "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "merchandise_provider_uuid": "<printful_provider_uuid>",
   "generated_image_uuid": "<transparent_image_uuid>",
   "provider_product_ref_id": "399",
   "templates": [
@@ -147,7 +147,7 @@ Capture `job_uuid`.
 One call handles BOTH completion phases (provider render + S3 ingestion):
 
 ```bash
-ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
+ah_poll_mockup <printful_provider_uuid> <job_uuid>
 ```
 
 Writes the final response to `/tmp/preview_job.json`. Then extract the black front URL:
@@ -176,7 +176,7 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-
   "description": "Classic heraldic crest embroidered on a Champion Packable Anorak. Lightweight, packable, perfect for transitional weather.",
   "generated_image_uuid": "<transparent_image_uuid>",
   "preview_job_uuid": "<job_uuid>",
-  "provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "provider_uuid": "<printful_provider_uuid>",
   "product_ref_id": "399",
   "price": 89.99,
   "display_image": "<mockup_url>",

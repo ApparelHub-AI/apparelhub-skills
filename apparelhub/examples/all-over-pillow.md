@@ -16,7 +16,7 @@ A complete walkthrough for an 18×18 square pillow with an edge-to-edge floral p
 export APPARELHUB_API_KEY=ah_...   # one-time
 ```
 
-Printful prod provider UUID: `c8dff2fa-1a43-4734-93f0-e2ddd03eae53`
+Printful provider UUID (per-account; get yours from `GET /agents/v1/merchandise`): `<printful_provider_uuid>`
 Pillow product_ref_id: `214`
 
 ---
@@ -74,7 +74,7 @@ For an 18×18 pillow, area = 2717 × 2717 px. The template's `width` and `height
 
 Verify the print template first:
 ```bash
-curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/c8dff2fa-1a43-4734-93f0-e2ddd03eae53/product/214" -H "x-api-key: $APPARELHUB_API_KEY"
+curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<printful_provider_uuid>/product/214" -H "x-api-key: $APPARELHUB_API_KEY"
 # Expect: front placement with area_width=2717, area_height=2717 for 18×18
 ```
 
@@ -82,7 +82,7 @@ Create the preview. Substitute the LITERAL image UUID + URL from Phase 1:
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/preview" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
-  "merchandise_provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "merchandise_provider_uuid": "<printful_provider_uuid>",
   "generated_image_uuid": "<image_uuid>",
   "provider_product_ref_id": "214",
   "templates": [
@@ -120,7 +120,7 @@ For lumbar (20×12) or 22×22, swap the variant ID AND the area dimensions to ma
 One call handles BOTH completion phases (provider render + S3 ingestion):
 
 ```bash
-ah_poll_mockup c8dff2fa-1a43-4734-93f0-e2ddd03eae53 <job_uuid>
+ah_poll_mockup <printful_provider_uuid> <job_uuid>
 ```
 
 Writes the final response to `/tmp/preview_job.json`. Then extract a mockup URL for visual inspection:
@@ -151,7 +151,7 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/product/create" -H "x-api-
   "description": "Hand-painted-style watercolor wildflower motif on a deep teal field. 18x18 polyester throw pillow with concealed zipper. Edge-to-edge print on both sides.",
   "generated_image_uuid": "<image_uuid>",
   "preview_job_uuid": "<job_uuid>",
-  "provider_uuid": "c8dff2fa-1a43-4734-93f0-e2ddd03eae53",
+  "provider_uuid": "<printful_provider_uuid>",
   "product_ref_id": "214",
   "price": 44.99,
   "display_image": "<mockup_url>",

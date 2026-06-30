@@ -26,7 +26,7 @@ workspace. A subset is almost never missing data — it's a different scope.
 ## 2. Discover workspaces, then target one
 
 **List the account's workspaces** with `GET /agents/v1/workspaces`. This is how
-you turn a workspace *name* the user mentions ("the Crystal Riley client") into
+you turn a workspace *name* the user mentions ("the Acme Co client") into
 the `uuid` you scope with — do this first whenever the user names a workspace:
 
 ```bash
@@ -37,10 +37,10 @@ curl -sS "https://api.apparelhub.ai/agents/v1/workspaces" \
 ```json
 {
   "workspaces": [
-    {"uuid": "d587…", "name": "Default",      "is_default": true},
-    {"uuid": "7b69…", "name": "Crystal Riley", "is_default": false}
+    {"uuid": "…", "name": "Default",      "is_default": true},
+    {"uuid": "…", "name": "Acme Co", "is_default": false}
   ],
-  "active_workspace": {"uuid": "d587…", "name": "Default", "is_default": true},
+  "active_workspace": {"uuid": "…", "name": "Default", "is_default": true},
   "key_scope": {"pinned": false, "workspace_uuid": null, "role": null}
 }
 ```
@@ -64,10 +64,10 @@ curl -sS "https://api.apparelhub.ai/agents/v1/store" \
   -H "x-api-key: $APPARELHUB_API_KEY"
 
 # A specific client workspace (uuid from GET /agents/v1/workspaces above)
-curl -sS "https://api.apparelhub.ai/agents/v1/store?workspace=7b69…" \
+curl -sS "https://api.apparelhub.ai/agents/v1/store?workspace=<workspace_uuid>" \
   -H "x-api-key: $APPARELHUB_API_KEY"
 
-curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?workspace=7b69…&limit=20&sort=newest" \
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?workspace=<workspace_uuid>&limit=20&sort=newest" \
   -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
@@ -115,7 +115,7 @@ Responses tell you, so you never have to guess.
 
   ```json
   "workspaces": [
-    {"uuid": "…", "name": "Crystal Riley", "is_default": false},
+    {"uuid": "…", "name": "Acme Co", "is_default": false},
     {"uuid": "…", "name": "Default",       "is_default": true}
   ]
   ```
@@ -129,10 +129,10 @@ Responses tell you, so you never have to guess.
   than an array:
 
   ```json
-  "workspace_uuid": "…", "workspace_name": "Crystal Riley", "workspace_is_default": false
+  "workspace_uuid": "…", "workspace_name": "Acme Co", "workspace_is_default": false
   ```
 
-Practical use: a product whose `workspaces` is `[{"name": "Crystal Riley"}]`
+Practical use: a product whose `workspaces` is `[{"name": "Acme Co"}]`
 won't appear when the active workspace is Default — that's correct, not a bug.
 Switch with `?workspace=` to act on it.
 

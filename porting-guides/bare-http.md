@@ -32,7 +32,7 @@ Before the agent starts:
 
 ## Walkthrough — saguaro sunset tee on BC 3001
 
-User prompt: *"Design a saguaro sunset tee and add it to my Merctech Apparel store. Black, navy, and white in S–2XL. Don't sync to Shopify yet."*
+User prompt: *"Design a saguaro sunset tee and add it to my Acme Apparel store. Black, navy, and white in S–2XL. Don't sync to Shopify yet."*
 
 ### 1. Discover the user's store and the Printful provider UUID
 
