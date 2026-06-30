@@ -9,6 +9,7 @@ How to interpret API errors and the most common silent-failure modes.
 | Status | What it means | What to do |
 |---|---|---|
 | 401 | API key missing or invalid | Verify the user's `APPARELHUB_API_KEY` env var. Have them generate a new one at `https://apparelhub.ai/developer/api-keys` if it's expired. |
+| 402 | Account suspended — the owner's trial ended with no card on file; the account is read-only | `error=account_suspended`. The agent can't pay; tell the account OWNER to add a payment method at the `billing_url` in the body. Reads still work; only writes/quota/sync are blocked. Don't retry. See §2c. |
 | 403 | User's tier doesn't include API access OR endpoint is admin-only OR JWT auth attempted from non-browser | If `code=tier_missing_api_access`, link the user to `https://apparelhub.ai/pricing` (Professional / Enterprise required). If the user tried JWT auth from curl, switch to the Agent API + API key. |
 | 404 | Endpoint path wrong OR resource doesn't exist | Verify the path against `https://api.apparelhub.ai/agents/v1/openapi.json`. If the resource UUID is wrong, list to confirm. |
 | 409 | Conflict — usually integration locked, sales channel uniqueness violation, or duplicate product | Read the error body. See "Common 409 codes" below. |
@@ -78,6 +79,44 @@ A workspace-scoped key's role doesn't permit this action (e.g. `{"error":"forbid
 **Fix**: surface it; don't retry. Use an account-wide key or a key whose role holds the capability.
 
 **A bad `?workspace=` fails the whole request** — there's no partial result. And a scoped list returning a SUBSET is not an error: see `references/workspaces.md` ("don't misread a scoped list as missing data").
+
+---
+
+## 2c. Account suspended (402) — trial ended, no card
+
+When the account owner's invite-only trial expires with no payment method on
+file, the account enters a **read-only freeze**. Any write / create /
+quota-consuming / channel-push call returns **HTTP 402**:
+
+```json
+{
+  "error": "account_suspended",
+  "reason": "trial_expired",
+  "tier": "Enterprise",
+  "message": "This account's Enterprise trial has ended. The account owner must add a payment method in Billing to continue.",
+  "billing_url": "https://apparelhub.ai/billing/subscription"
+}
+```
+
+**Reads still work.** GET calls succeed — you can list/inspect stores, products,
+designs, and orders. Only mutations are gated.
+
+**Blocked (402):** image generation, product/store create + update, integration
+connect/initiate, merchandise + ecommerce sync, order submit/confirm — every
+write route, on both the web and agent APIs.
+
+**What the agent should do:** you can't add a card on the owner's behalf. Stop
+the write (don't retry — a 402 won't clear until a card is added) and tell the
+human/owner:
+
+> "This account's `<tier>` trial has ended, so it's read-only right now. The
+> account owner needs to add a payment method at `<billing_url>` to continue.
+> Everything you've built is safe, and full access resumes automatically once a
+> card is added."
+
+**Inbound orders are NOT dropped.** Storefront orders that arrive while suspended
+are held and auto-release to fulfillment the moment the owner adds a card, so a
+real customer who paid on the merchant's live store is never stranded.
 
 ---
 
