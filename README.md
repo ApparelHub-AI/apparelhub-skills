@@ -211,3 +211,9 @@ The acceptance playbook in [`acceptance/playbook.md`](./acceptance/playbook.md)
 is run before every release tag. The CI workflow in
 [`.github/workflows/forbidden-patterns.yml`](./.github/workflows/forbidden-patterns.yml)
 guards against v1.x antipatterns reappearing.
+
+---
+
+## License
+
+This project is licensed under the [MIT License](./LICENSE).
