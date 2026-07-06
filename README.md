@@ -86,7 +86,7 @@ else is platform-specific scaffolding.
 
 Pick the path that matches your agent.
 
-### Hosted connector — Claude.ai, Perplexity, ChatGPT (no install)
+### Hosted connector for Claude.ai, Perplexity, ChatGPT (no install)
 
 The lowest-friction path, with nothing to install. In Claude.ai or Perplexity (or ChatGPT on Business or Enterprise), add a **custom connector** pointing at:
 
