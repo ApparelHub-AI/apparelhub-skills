@@ -86,6 +86,18 @@ else is platform-specific scaffolding.
 
 Pick the path that matches your agent.
 
+### Hosted connector — Claude.ai, Perplexity, ChatGPT (no install)
+
+The lowest-friction path, with nothing to install. In Claude.ai or Perplexity (or ChatGPT on Business or Enterprise), add a **custom connector** pointing at:
+
+```
+https://mcp.apparelhub.ai
+```
+
+Sign in to ApparelHub once and the connector links to your account. Your agent gets the full ApparelHub tool surface (design, build, sync, orders) as typed tools, run on our compute. No key to paste, no shell. Walkthrough: [Use ApparelHub from Claude on the web](https://apparelhub.ai/blog/use-apparelhub-from-claude-web).
+
+The rest of this section covers running the skill or tools inside your own agent runtime.
+
 ### Claude Code (CLI on macOS/Linux)
 
 ```bash
