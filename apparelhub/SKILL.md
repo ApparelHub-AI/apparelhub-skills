@@ -161,6 +161,7 @@ reference up front saves you from shipping a broken product.
 | **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
 | **Enterprise / agency account** (multiple workspaces; a list looks like it's "missing" stores/products/designs, or you need to target a specific client workspace) | `references/workspaces.md` covers the `GET /agents/v1/workspaces` discovery route, the `?workspace=` param, the `workspaces` visibility field, 403/404 handling, and workspace-scoped keys |
+| **Analytics / reporting** — sales KPIs, trends, top sellers, channel mix, margins, ops health, CSV export, or an agency's per-client portfolio | `references/analytics.md` covers the six read-only `/agents/v1/analytics/*` endpoints, the `advanced_analytics` tier gate (Professional+), currency segmentation, and the `margin_coverage` caveat |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and
 sync it"), the `examples/` directory has working walkthroughs you can

@@ -254,6 +254,23 @@ push as `active` when the user explicitly says "make it live."
 
 Payment authority rules live in `references/orders-and-fulfillment.md`.
 
+### Analytics (read-only; `advanced_analytics` tier gate)
+
+| Method | Path | Purpose |
+|---|---|---|
+| `GET` | `/agents/v1/analytics/summary` | Headline KPIs + prior-period deltas. |
+| `GET` | `/agents/v1/analytics/timeseries` | KPI series by `interval` (day/week/month). |
+| `GET` | `/agents/v1/analytics/breakdown` | Aggregates by `dimension` (product_type/sales_channel/fulfillment_provider/product/variant/hold_reason). |
+| `GET` | `/agents/v1/analytics/ops` | Fulfillment velocity + hold/cancel/refund rates. |
+| `GET` | `/agents/v1/analytics/export` | CSV (`report` = summary/timeseries/breakdown/ops/orders). |
+| `GET` | `/agents/v1/analytics/portfolio` | Per-client (per-workspace) roll-up — agency (Enterprise) accounts only. |
+
+Shared params `start`/`end`/`store`/`currency` (+ `?workspace=`). All six return
+`403 feature_unavailable` (`feature: advanced_analytics`) below Professional;
+`portfolio` additionally `403`s (`feature: client_portfolio`) for non-agency
+accounts. Currencies are segmented, never summed; margins cover only cost-known
+orders (`margin_coverage`). Full contract in `references/analytics.md`.
+
 ### Garment catalog
 
 | Method | Path | Purpose |
