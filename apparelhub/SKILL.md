@@ -115,18 +115,46 @@ unsure about a field name or response shape, fetch the spec.
 
 ## 2. The product-creation pipeline at a glance
 
-Going from "user wants a saguaro tee" to "product is live on their
-Shopify store" takes 7 phases. Execute IN ORDER:
+Going from "user wants a saguaro tee" to a finished, sellable product
+takes these phases. Execute IN ORDER:
 
 1. **Generate the design image.** `POST /images/generate` with a prompt (slow models, including the Nano Banana default, return **202 + `image_uuid`** and must be polled with `ah_poll_generation`; fast models return 200 + `url`)
 2. **LOCAL transparency processing** (your compute, NOT an API call). For
    standard apparel only; SKIP for all-over print
-3. **Generate the mockup.** `POST /merchandise/product/preview`
+3. **Generate the mockup.** `POST /merchandise/product/preview`. A finished
+   product should show a garment MOCKUP, not the bare design — never skip this
+   for a product you're presenting as done.
 4. **Pick `display_image` + build `gallery_images` from preview rows**
 5. **Create the product.** `POST /product/create`
-6. **Add variants** (one at a time, no batch endpoint)
-7. **Associate with store + sync to fulfillment + sync to sales
-   channels.** Default to DRAFT, not live
+6. **Add variants** (one at a time, no batch endpoint). Read the garment's
+   ACTUAL colors/sizes from `get_garment_details` first — do NOT assume
+   S/M/L/XL/2XL. Caps, beanies, phone cases, bottles, bags etc. are often
+   one-size or use different labels; assuming apparel sizes yields 0 variants.
+7. **Map the product to the user's store + sync to fulfillment
+   (Printful/Printify).** This is what "map / add to store" and "store
+   availability" mean — the product is associated with the store and
+   manufacturable. **This is the normal end of the pipeline.**
+8. **(ONLY if the user explicitly asked to list / publish / sell it on a
+   storefront) sync to the sales channel** (Shopify/WooCommerce/Wix), as a
+   DRAFT unless they said go live. Separate, opt-in step — see the ⚠️ below.
+
+> ⚠️ **"Map / add to a store" is NOT "publish to a sales channel" — don't
+> conflate them.** An ApparelHub *store* holds a fulfillment provider
+> (Printful/Printify) and, optionally, connected sales channels
+> (Shopify/WooCommerce/Wix). **Mapping** a product to a store (Phase 7) makes
+> it manufacturable and lists it under the store in ApparelHub; it does NOT
+> create a storefront listing. Only push to a **sales channel** (Phase 8 —
+> `sync_to_channel` / `?target=ecommerce`) when the user EXPLICITLY asks to
+> list, publish, or sell it on that storefront. If they said "map it to the
+> store" / "add it to my store" / "put it in the store," STOP at Phase 7 —
+> do not invent a channel sync. (This is a real regression that shipped in an
+> automated task: "map to the store" was wrongly extended to a WooCommerce sync.)
+
+**Fastest correct path (especially for automated / scheduled runs): the
+`ship_product` MCP tool does Phases 3–7 in ONE call** (mockup → create →
+variants → associate → fulfillment sync) with the ordering guaranteed, and
+only touches a sales channel if you pass `sync_to_channels`. Prefer it over
+chaining the split primitives yourself.
 
 **Full pipeline detail (every call, every field, every gotcha) lives in
 `references/product-creation-pipeline.md`.** Read it before executing

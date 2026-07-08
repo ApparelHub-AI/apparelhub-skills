@@ -1,6 +1,10 @@
 # Product Creation Pipeline — Full Detail
 
-The 7-phase workflow from "user wants a saguaro tee" to "product is live on their Shopify store." Execute the phases IN ORDER. Skipping or reordering a phase produces broken products that look successful but silently fail downstream.
+The workflow from "user wants a saguaro tee" to a finished, sellable product. Execute the phases IN ORDER. Skipping or reordering a phase produces broken products that look successful but silently fail downstream.
+
+> **Where does the pipeline END?** By default, at **Phase 7 — the product is created, mapped to the user's store, and synced to fulfillment (manufacturable).** Phase 8 (pushing a listing to a Shopify/WooCommerce/Wix storefront) is a SEPARATE, opt-in step. Only do it when the user EXPLICITLY asks to list / publish / sell on a storefront. "Map / add to the store" and "store availability" mean Phase 7 (association + fulfillment) — NOT a sales-channel listing. Don't extend "add it to my store" into a channel sync.
+
+> **Shortcut for the whole build (recommended for automated / scheduled / bounded runs): the `ship_product` MCP tool runs Phases 3–7 in ONE call** — mockup, create, variants, store association, fulfillment sync — with the correct order guaranteed, and only touches a sales channel if you pass `sync_to_channels`. The split primitives (`create_product`, `add_variants`, `sync_to_fulfillment`, `sync_to_channel`) are for interactive/partial flows; if you chain them, follow the exact order in Phases 5→8 below.
 
 **All Agent API calls in this document are shown as plain `curl https://api.apparelhub.ai/agents/v1/...` invocations.** Any HTTP client works equivalently — `requests`, `fetch`, native function-call HTTP, etc. The base URL is the canonical host (`https://api.apparelhub.ai`); see `../../SECURITY.md`. When you see placeholders like `<image_uuid>` or `<job_uuid>`, substitute the value the previous step returned. Your runtime may prompt the first time it expands `$APPARELHUB_API_KEY` — that's the platform's safety control working correctly; approve in context.
 
@@ -414,6 +418,8 @@ Returns the new product `uuid`.
 
 Variants are created ONE AT A TIME (no batch endpoint). The product is unsyncable until variants exist.
 
+> ⚠️ **Read the garment's REAL colors/sizes before you build the variant list — do NOT hardcode `S/M/L/XL/2XL`.** Sizes are matched EXACTLY. Tees/tanks/hoodies use `S…2XL`, but caps, beanies, phone cases, water bottles, bags, socks, blankets, glasses, towels etc. are frequently **one-size** or use different labels (`One size`, `OSFA`, `S/M`, `L/XL`, a device model, a volume). Requesting apparel sizes on a one-size garment resolves to **ZERO variants** and — via the split-primitive `add_variants` — used to ship a 0-variant product silently. Always fetch the actual matrix first: `curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>"` (or the `get_garment_details` MCP tool) and build the variant list from the colors/sizes it returns. If you add variants and get **0 added / an error naming the available options**, that's this — you assumed the wrong size vocabulary.
+
 Issue 15 separate POSTs, one per variant. There is no batch endpoint. If you're driving this from a tool-calling agent, that's 15 separate function calls; from a script, 15 separate `curl` invocations:
 
 ```bash
@@ -436,7 +442,9 @@ Or use the quick-reference variant tables in `references/garment-catalog.md`.
 
 ---
 
-## Phase 6 — Associate the product with the user's store
+## Phase 6 — Associate the product with the user's store ("map to store", part 1)
+
+This + Phase 7 together are what a merchant means by **"map / add the product to the store"** or **"store availability."** Phase 6 registers the product under the store; Phase 7 makes it manufacturable. Neither creates a storefront listing.
 
 ```bash
 # List stores first
@@ -448,25 +456,32 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/product
 
 ---
 
-## Phase 7 — Sync to fulfillment AND sales channels
-
-Sync targets are different depending on what you're syncing to.
-
-### Fulfillment (Printful/Printify) — REQUIRED FIRST
+## Phase 7 — Sync to fulfillment ("map to store", part 2) — the normal END of the pipeline
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=merchandise" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
-This creates the product on the fulfillment provider's side. MUST succeed before ecommerce sync — Shopify/Etsy/etc. need the fulfillment SKU to attach.
+This creates the product on the fulfillment provider's side (Printful/Printify) so it's manufacturable. **Association (Phase 6) MUST happen first** — this sync is addressed under the store's product list. Together, Phases 6+7 are "the product is mapped to the store." **For most requests — including "map it to the Agent Printful store", "add it to my store" — you STOP HERE.** The product is created, on the store, and sellable.
 
-### Ecommerce (Shopify, Etsy, WooCommerce, Wix)
+> **MCP-tool mapping (if you're driving the platform via the ApparelHub MCP tools, not raw curl):**
+> - **`ship_product`** = Phases 3–7 in one call (mockup → create → variants → associate → fulfillment sync). Preferred, especially for automated runs.
+> - **`sync_to_fulfillment(product_uuid, store_uuid)`** = Phase 6 + Phase 7 combined (it associates the product with the store AND syncs to fulfillment). This is the "map to store" step and the REQUIRED precursor to any channel sync.
+> - **`sync_to_channel(...)`** = Phase 8 below (sales channel), opt-in only.
+
+---
+
+## Phase 8 — (OPT-IN) Sync to a sales channel — ONLY when the user asks to list/publish on a storefront
+
+**Do NOT do this step unless the user EXPLICITLY asked to list, publish, or sell the product on a storefront (Shopify, WooCommerce, Wix, Etsy).** "Map to the store" / "add to the store" / "store availability" do NOT mean this — they mean Phases 6–7. Pushing to a sales channel when the user only asked to map to the store is over-reach (it happened in an automated task and created unwanted WooCommerce drafts).
+
+If (and only if) they asked to list it on a storefront:
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/products/<product_uuid>/sync?target=ecommerce&integration_uuid=<integration_uuid>" -H "x-api-key: $APPARELHUB_API_KEY"
 ```
 
-Sync to multiple channels by calling this once per integration UUID.
+Fulfillment (Phase 7) MUST have succeeded first — the storefront listing attaches to the fulfillment SKU. Sync to multiple channels by calling this once per integration UUID.
 
 ### Default to DRAFT, not live
 
@@ -474,5 +489,3 @@ For channels that support a draft state (Etsy, Shopify), prefer pushing as a dra
 > "I've synced as drafts so you can review on your storefront before going live. To publish, flip the listing in your channel admin or re-run sync with `?listing_state=active`."
 
 Only push as `active` if the user EXPLICITLY says "make it live" or "publish it." The cost of a too-eager publish (typo'd description in front of real customers) is much higher than the cost of one extra step.
-
-Done — the product is now synced to the user's storefront in draft form.

@@ -124,11 +124,27 @@ real customer who paid on the merchant's live store is never stranded.
 
 The most common "I thought I synced this but customers don't see it" issues:
 
+### `product not associated with store` (channel sync fails)
+
+Symptom: `sync_to_channel` (or `?target=ecommerce`) fails with **"product not associated with store"** and the product is left created-but-unsynced. Classic in automated flows that jump `create_product` → `sync_to_channel`.
+
+**Cause**: the product was never mapped to the store. `create_product` makes a STANDALONE product; a sales-channel listing requires the product to first be associated with the store AND synced to fulfillment.
+
+**Fix**: run the "map to store" step first — `sync_to_fulfillment(product_uuid, store_uuid)` (MCP; it associates + fulfillment-syncs), or Phase 6 `POST /store/<s>/products` then Phase 7 `?target=merchandise` (REST) — then retry the channel sync. Better: use `ship_product`, which runs the whole ordered pipeline in one call. (MCP `sync_to_channel` v0.3.1+ auto-heals this and returns a `warnings[]` note, but the clean order is map-to-store first — and only sync to a channel at all if the user asked to list on a storefront.)
+
 ### Variants not yet created (Phase 5 skipped)
 
 Phase 7 sync to `target=merchandise` returns `400 No valid variants found to sync`. The product has no rows in the variants table.
 
 **Fix**: go back and run Phase 5 (one variant at a time, no batch endpoint). Verify with `GET /agents/v1/product/<uuid>/variants` before retrying sync.
+
+### 0 variants added — the requested colors/sizes don't exist on the garment
+
+Symptom: you called `add_variants` but the product ends with 0 (or fewer than expected) variants. On MCP v0.3.1+ `add_variants` throws `bad_request` listing the garment's real colors/sizes; older behavior returned `variants_added: 0` silently and shipped an unsellable product (this is what left a World-Cup Cap with 0 variants).
+
+**Cause**: sizes are matched EXACTLY and you assumed apparel sizes (S/M/L/XL/2XL) for a garment that's one-size or uses different labels — caps, beanies, phone cases, bottles, bags, etc.
+
+**Fix**: fetch the garment's real matrix (`GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>`, or the `get_garment_details` MCP tool) and build the variant list from the colors/sizes it actually offers. See `references/product-creation-pipeline.md` Phase 5.
 
 ### Fulfillment sync wasn't run before ecommerce sync (Phase 7 ordering)
 
@@ -148,9 +164,9 @@ User disconnected the channel from apparelhub.ai, OR Shopify Token Exchange retu
 
 Symptom: the product card thumbnail shows the flat design on a green background (or transparent checkerboard), not a real mockup.
 
-**Cause**: `display_image` was set to `print_data[0].image_url` (the raw design) instead of a `preview_url` from the preview job.
+**Cause**: no mockup was ever generated, so `display_image` fell back to `print_data[0].image_url` (the raw design). Common causes: you skipped Phase 3 entirely, OR (MCP split flow) you called `create_product` with `generate_mockup: true` but pre-0.3.1 that was a silent no-op unless `mockup_variant_ids` was ALSO passed — so no preview job was created. (Every product in the World-Cup automated run shipped this way.)
 
-**Fix**: `PATCH /agents/v1/product/<uuid>` with `display_image` set to a real mockup URL from the preview job's preview rows. See `references/product-creation-pipeline.md` Phase 4.0 for the picker logic.
+**Fix**: generate a mockup and attach it. Easiest: use `ship_product` (mockup is built in), or `create_product` with `generate_mockup: true` on MCP v0.3.1+ (it now auto-derives representative variants). To repair an existing product, `PATCH /agents/v1/product/<uuid>` with `display_image` set to a real mockup URL from the preview job's preview rows. See `references/product-creation-pipeline.md` Phase 3 + 4.0.
 
 ### Wrong field names in Phase 4 (product create)
 
