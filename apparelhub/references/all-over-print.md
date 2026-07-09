@@ -275,6 +275,17 @@ The MCP does this automatically (a placement with a known face layout = display 
 structural → solid). Building by hand: put the design only on the true display faces and a matching
 solid on everything else. The goal: **every face covered, none blank, none busy/clipped.**
 
+### Cylindrical drinkware (water bottles, tumblers, mugs, glasses)
+
+A bottle/tumbler/mug/glass print area **wraps around the tube**: its top maps onto the
+shoulder/neck, its bottom onto the base, and its left/right around the sides out of frontal view.
+A design that fills the area clips at every edge — the MOROCCO water bottle cut the flag star at
+the top and "MOROCCO" at the base. **Inset the design into the flat frontal band** (roughly the
+central ~68% width, y 0.13–0.85) with margin so no element touches a wrapping edge. These are
+"placed" goods (design on the bare surface), so compose the inset on a transparent canvas. The MCP
+does this automatically for drinkware; building by hand, size the design to the central band and
+keep clear of the top/bottom/side edges.
+
 ### The generic rule
 
 A fill/all-over print area with an extreme aspect (≤ 1:2 or ≥ 2.2:1) that isn't a known
