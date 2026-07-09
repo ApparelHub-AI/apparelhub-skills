@@ -196,6 +196,14 @@ Symptom: you called `add_variants` but the product ends with 0 (or fewer than ex
 
 **Fix**: fetch the garment's real matrix (`GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>`, or the `get_garment_details` MCP tool) and build the variant list from the colors/sizes it actually offers. See `references/product-creation-pipeline.md` Phase 5.
 
+### "No variants could be resolved" on a garment with ONE dimension (clear phone cases etc.)
+
+Symptom: `ship_product` / `add_variants` fails with `bad_request: No variants could be resolved` even though your size names are correct.
+
+**Cause**: many non-apparel goods have a SINGLE variant dimension. A clear phone case's catalog has device sizes ("iPhone 15", "iPhone 16 Pro Max"...) but **no color at all**; some one-size goods have colors but no size. Requiring a color+size match against a catalog that lacks one dimension matches nothing (the WC26 MOROCCO clear-case failure).
+
+**Fix**: on MCP v0.3.6+ this is automatic — the resolver matches by the dimension the catalog HAS and keeps your requested name as the variant label (a warning explains the match), and the error lists the catalog's real color/size names when nothing resolves. On older versions or the raw API: pass explicit `provider_variant_ids`, or send the catalog's own values verbatim (e.g. color `""`).
+
 ### Fulfillment sync wasn't run before ecommerce sync (Phase 7 ordering)
 
 Ecommerce sync (Shopify/Etsy/etc.) needs the fulfillment SKU to attach. If you try `target=ecommerce` before `target=merchandise`, the ecommerce sync may succeed cosmetically but the product won't have a manufacturing path.
