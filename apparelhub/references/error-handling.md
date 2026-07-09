@@ -196,6 +196,24 @@ Symptom: you called `add_variants` but the product ends with 0 (or fewer than ex
 
 **Fix**: fetch the garment's real matrix (`GET /agents/v1/merchandise/<provider_uuid>/product/<product_ref_id>`, or the `get_garment_details` MCP tool) and build the variant list from the colors/sizes it actually offers. See `references/product-creation-pipeline.md` Phase 5.
 
+### `verify_design_quality` returns a "block" / low-resolution — do NOT skip the item
+
+Symptom: a design fails a pre-flight QC gate with a resolution "block" (e.g. `847x596`), and an
+unattended/scheduled build skips the item — which then never gets built.
+
+**Cause**: keying + tight-crop shrinks a design (a 1024×1024 design can crop to `847x396`). Older
+QC treated a min side < 600px as a hard BLOCK.
+
+**Fix (MCP v0.3.9+, automatic)**: low resolution is now a WARN, never a block — `process_transparency`
+upscales its keyed output to a resolution floor, and `ship_product`'s placed path upscales to the
+print area, so the design builds. **Do not treat low resolution as a reason to skip.** The warn
+means "regenerate the source at 1024px+ for genuinely sharp large-format detail," not "abort."
+
+**Rule for any automated/scheduled build loop**: only a HARD block (an item explicitly marked
+un-buildable, or a genuine unrecoverable error) should defer an item — and even then, DEFER +
+RETRY-NEXT-RUN, never permanently skip in a way that stalls the whole run. See "Scheduled /
+reconciler builds" in `product-creation-pipeline.md`.
+
 ### "No variants could be resolved" on a garment with ONE dimension (clear phone cases etc.)
 
 Symptom: `ship_product` / `add_variants` fails with `bad_request: No variants could be resolved` even though your size names are correct.
