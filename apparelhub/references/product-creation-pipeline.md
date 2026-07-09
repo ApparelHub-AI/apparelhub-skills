@@ -498,3 +498,33 @@ For channels that support a draft state (Etsy, Shopify), prefer pushing as a dra
 > "I've synced as drafts so you can review on your storefront before going live. To publish, flip the listing in your channel admin or re-run sync with `?listing_state=active`."
 
 Only push as `active` if the user EXPLICITLY says "make it live" or "publish it." The cost of a too-eager publish (typo'd description in front of real customers) is much higher than the cost of one extra step.
+
+---
+
+## Scheduled / reconciler builds (automated, unattended runs)
+
+When a build loop runs on a schedule (a cron/trigger firing every hour, a batch that rebuilds a
+catalog), design it as a **desired-state reconciler**, not a one-shot builder. This is what keeps
+an unattended run from leaving gaps or stalling, and lets it auto-recover after you fix a bug.
+
+**Reconcile, don't self-terminate.** Each run: read the ACTUAL products, compare to the desired
+plan, and (re)build anything missing or unmapped. When everything is present, report "all present —
+idle" and stop for that run, but do NOT delete the trigger. Deleting the trigger is what prevents
+recovery — if you later fix the pipeline and delete a bad product to force a rebuild, there has to
+be a next run to rebuild it. Stop the loop by deleting the trigger manually (or lowering its cadence)
+when the work is truly done, not automatically on first completion.
+
+**Deletion is the rebuild signal.** The "done" check should be presence of the named product mapped
+to its store. So the operator's workflow to fix products that came out wrong is: fix + deploy the
+MCP/skill → DELETE the wrong products → the next run rebuilds them, correctly, with the fixed
+pipeline. No product is left as a gap.
+
+**Never STALL on one un-buildable item.** If an item can't build this run (a genuine error, or a
+design that needs regenerating), leave it un-built, report it as "pending: <reason>", and let the
+NEXT run retry it — do not let one item block the rest of the run or the loop. Auto-recoverable
+conditions (low resolution, a tinted-green key, a wrong-size variant guess) are handled by the tools
+and should not defer an item at all (see `error-handling.md`). Only an explicitly un-supported item
+(e.g. a garment type you're deliberately skipping) is a permanent "count-as-done" deferral.
+
+**Idempotency.** A present-and-mapped item is skipped; a product that exists but isn't mapped gets
+mapped (`sync_to_fulfillment`), never duplicated. Match products by a stable name you control.
