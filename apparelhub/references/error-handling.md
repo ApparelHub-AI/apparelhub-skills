@@ -120,6 +120,56 @@ real customer who paid on the merchant's live store is never stranded.
 
 ---
 
+## 2d. Mockup preview store selection errors
+
+`POST /agents/v1/merchandise/product/preview` accepts an optional `store_uuid`
+that pins mockup generation to a specific store's fulfillment-provider
+connection. Two failure modes, both fail-loud by design (previously these
+silently fell through to the platform's shared credentials):
+
+### `provider_store_mismatch` (400)
+
+The `store_uuid` you passed names a real, accessible store — but that store is
+not connected to the merchandise provider in the request. Example: passing a
+store that's only connected to one provider while creating a preview for a
+different provider's catalog item.
+
+**Recovery:** list the user's stores (`GET /agents/v1/store`), filter for one
+whose `providers[]` contains an entry with the requested provider's uuid AND a
+non-null `external_id`, and retry with that store — or omit `store_uuid`
+entirely to use the account's first connected store for that provider.
+
+### `store_not_found` (404)
+
+The `store_uuid` doesn't exist or isn't accessible to the caller (wrong
+workspace scoping is a common cause — see section 2b).
+
+### The `connection` block — which credentials actually ran
+
+The preview create response AND the job poll response carry an additive
+`connection` object telling you which fulfillment connection was used:
+
+```json
+{
+  "connection": {
+    "store_uuid": "<store_uuid>",
+    "store_name": "Acme Apparel",
+    "shared": false
+  }
+}
+```
+
+- `shared: false` — the preview runs through the named store's own provider
+  connection (either the `store_uuid` you passed, or the account's first
+  connected store when you omitted it).
+- `shared: true` (`store_uuid`/`store_name` null) — the account has no store
+  connected to that provider, so the platform's shared credentials ran.
+  Shared mode is subject to shared rate limits (the 429 with
+  `action_required: "connect_store"`) — check `connection.shared` before
+  assuming a merchant connection was used.
+
+---
+
 ## 3. Sync failures — the silent class
 
 The most common "I thought I synced this but customers don't see it" issues:

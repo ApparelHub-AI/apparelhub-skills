@@ -270,6 +270,15 @@ Notes:
 - Include ALL variant_ids across ALL colors in ONE preview call (15 IDs for 3 colors × 5 sizes here). The provider returns separate mockups per color in the same job.
 - Missing any template field → 404 with `KeyError` or generic Exception from `merchandise.py`. Common cause of "Error building the standard response for product preview." Always pass the full template object.
 - The SAME `width`/`height`/`top`/`left` numbers must be used in the Phase 4 product create body's `print_data[0]`. Mismatched dimensions produce inconsistent state between the mockup and the actual print.
+- **Fulfillment connection (`store_uuid`, optional):** pass a `store_uuid` to pin
+  mockup generation to that store's connection to this provider; omit it to use the
+  account's first store connected to the provider. With no connected store at all,
+  the platform's shared credentials run (subject to shared rate limits). Passing a
+  store that is NOT connected to the requested provider fails with
+  `400 provider_store_mismatch` — see `references/error-handling.md` section 2d.
+  The response's `connection` block (`{store_uuid, store_name, shared}`, also on the
+  job poll) tells you which connection ACTUALLY ran — check `connection.shared`
+  before assuming a merchant connection was used.
 
 Returns a `job_uuid`. Mockup generation is **async**. Use the packaged `ah_poll_mockup` script — DO NOT write an inline `for` loop with `$(...)` command substitution; the expansion check will prompt on every iteration.
 
