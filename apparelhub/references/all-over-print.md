@@ -187,10 +187,36 @@ Visually inspect the mockup for:
 - **Design is UPRIGHT** (text reads normally) — some templates render the print file rotated (see §9)
 - **Design is fully visible on the product face** — not cut off at a fold, hem, or silhouette edge (see §9)
 - **NO unprinted surfaces**: every print placement of the product carries a file; an unprinted placement on an all-over product is raw white fabric (see §10)
+- **NO BLANK or HALF-COVERED FACES on multi-face / multi-piece merch** — check the back of a wallet, the second ear cup, the far side of a duffle; each face must carry the design, none split across a fold (see §9 "Multi-FACE wraps")
 - **NO chroma green anywhere** — if the keying background survived to the print file, stop and recompose
+- **Resolution is high enough** — a soft/pixelated print, or a platform "low resolution" QC block, means the design was too small (see §11)
 - For doormats: text reads left-to-right when product is oriented normally
 - For luggage tags: no faux strap hole visible in the design, no faux tag-frame visible inside the print area
 - For pillows: front and back surfaces both look intentional (back can be solid color or complementary graphic — both fine, just not blank)
+
+---
+
+## 11. Design resolution — regenerate (or upscale) when the platform blocks low-res
+
+AI designs are generated at ~1024px and then keyed + auto-cropped to the artwork bounding box,
+which can shrink them to e.g. 847×596. Placed on a large print area (accessories like passport
+wallets, phone cases, tote panels), the effective print DPI is too low and the fulfillment
+platform's QC gate returns a **"low resolution" block** — with no remediation the build
+dead-ends (the NORWAY passport wallet).
+
+Rules:
+- **Generate designs at the largest size the model offers** (prefer 1792 on the long side over
+  1024), so the cropped artwork stays large.
+- **Every print file should be ≥ ~2000px on the long side.** Fill/face composition already outputs
+  a high-pixel canvas; a raw PLACED design that's smaller is the risk.
+- **When a design is below the floor, upscale it (Lanczos) to the print-area resolution before
+  create** — this clears the QC gate (it's what every POD tool does). MCP v0.3.7+ does this
+  automatically on the placed path (`ensure_resolution.py`) and warns you to regenerate for real
+  detail. For raw-API builds, upscale the design yourself and re-upload before create.
+- **Upscaling doesn't add detail.** For detail-critical large-format goods, REGENERATE the source
+  design at higher resolution rather than relying on the upscale.
+- **If an automated run hits a genuine low-res block it can't clear, it must DEFER the item
+  (mark it blocked) and move on** — never let one un-buildable product stall the whole run.
 
 ---
 
@@ -213,15 +239,39 @@ against the live providers, 2026-07-09 — the WC26 ENGLAND sock + drawstring in
 - The single `front` area (4950×11100 ≈ 16.5"×37" — note the extreme aspect) is the **front + back in one file, folded at the bottom**. Art centered on the AREA straddles the fold and prints cut off at the hem.
 - The visible front = the **top ~50%** of the file; the drawstring channel eats the top ~5% and grommet corner cuts start at ~45%. Compose art centered within y 0.05–0.43; let the background fill the whole file (the back comes out solid — retail-correct).
 
+### Multi-FACE wraps: the design goes on EVERY face (no blank faces)
+
+Some wrap areas carry MORE THAN ONE physical face in a single print file. Centering the art
+lands it across the FOLD between faces, splitting it, and leaves each face with half a design.
+The rule: **multi-face merch gets the design on ALL faces — never a blank or half-covered face.** Grid-calibrated cases:
+
+- **Zipper / passport wallets** (Printify 708, ~2482×2756, near-square): the area is the front
+  AND back exterior folded at the bottom. The front face is the TOP half (renders upright); the
+  back face is the BOTTOM half and renders ROTATED 180° past the fold. Compose the design onto
+  BOTH halves — upright on top, pre-rotated on the bottom so it reads upright on the back. A
+  centered design prints split down the spine (the BELGIUM wallet).
+- **Headphone ear-cup shells** (Printify 1666, AirPods Max): the Left and Right cups are SEPARATE
+  oval faces (separate placements, same size). Put the design on BOTH — one printed cup next to a
+  blank one reads broken (the BELGIUM headphones). Because the face is an oval, inset the art
+  (~68% width, centered) so it doesn't clip at the cup edge.
+- **Duffles** (Printful 465): front/back display faces wrap past the top seam, under the base, and
+  around the rounded ends — keep art in the central frontal window (~x 0.12–0.88, y 0.15–0.75) or
+  it clips (the NORWAY duffle), and cover the sides/top/bottom/pocket with the background so no
+  panel prints as bare fabric (the NORWAY white strip).
+
 ### The generic rule
 
 A fill/all-over print area with an extreme aspect (≤ 1:2 or ≥ 2.2:1) that isn't a known
-strip/banner product is a SUSPECT WRAP — assume a fold or seam crosses it. Run a preview render
-and check where the art actually lands BEFORE building the product; never trust a blind center.
+strip/banner product is a SUSPECT WRAP — assume a fold or seam crosses it. A near-square area on a
+folding good (wallets, passport covers) is a SUSPECT TWO-FACE wrap. Any product with more than one
+same-size print placement (ear cups, cufflinks, two-panel goods) needs the design on EVERY piece.
+Run a preview render and check where the art actually lands — and that no face is blank — BEFORE
+building the product; never trust a blind center.
 
-The ApparelHub MCP server (v0.3.6+) applies these face layouts + rotations automatically for
-`print_style: "fill"`. If you build print_data by hand against the raw API, you must replicate
-them yourself.
+The ApparelHub MCP server (v0.3.7+) applies these face layouts, rotations, multi-face composition,
+and multi-piece replication automatically. If you build print_data by hand against the raw API,
+you must replicate them yourself: enumerate every placement in the garment's `templates[]`, and
+give each face/piece a file.
 
 ---
 
