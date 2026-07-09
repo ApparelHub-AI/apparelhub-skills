@@ -254,10 +254,26 @@ The rule: **multi-face merch gets the design on ALL faces — never a blank or h
   oval faces (separate placements, same size). Put the design on BOTH — one printed cup next to a
   blank one reads broken (the BELGIUM headphones). Because the face is an oval, inset the art
   (~68% width, centered) so it doesn't clip at the cup edge.
-- **Duffles** (Printful 465): front/back display faces wrap past the top seam, under the base, and
-  around the rounded ends — keep art in the central frontal window (~x 0.12–0.88, y 0.15–0.75) or
-  it clips (the NORWAY duffle), and cover the sides/top/bottom/pocket with the background so no
-  panel prints as bare fabric (the NORWAY white strip).
+- **Duffles** (Printful 465): the FRONT is the hero display face; keep its art in the central
+  frontal window (~x 0.12–0.88, y 0.15–0.75) — it wraps past the top seam, under the base, and
+  around the rounded ends, so full-width art clips (the NORWAY duffle). The other panels
+  (back/sides/top/bottom/pocket) are STRUCTURAL — give them the **solid background**, NEVER the
+  design plastered full-bleed (busy + clipped) and NEVER bare fabric (the NORWAY white strip).
+  Every panel must be covered; only the front carries the design (a merchant can request the design
+  on the back too).
+
+### DISPLAY faces vs STRUCTURAL panels (the "no white strip, no design-everywhere" rule)
+
+When a product has several print placements, decide per placement:
+- **Display face** — a surface the design belongs on (sock leg strips, both headphone cups, a
+  wallet's front+back, a duffle's front). Compose the design onto it (windowed/inset as needed).
+- **Structural panel** — a wrap/utility surface (duffle sides/top/bottom/pocket, backpack
+  top/bottom/pocket, an interior label). Fill it with the **solid background** derived from the
+  design's palette. Never leave it blank/white; never stamp the full design across it.
+
+The MCP does this automatically (a placement with a known face layout = display face; otherwise
+structural → solid). Building by hand: put the design only on the true display faces and a matching
+solid on everything else. The goal: **every face covered, none blank, none busy/clipped.**
 
 ### The generic rule
 
