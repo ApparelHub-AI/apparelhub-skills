@@ -199,6 +199,17 @@ If anything looks wrong, FIX the design and re-mockup before continuing. Manufac
 
 ---
 
+## 7b. Mockups must cover every color variant you import — decide colors FIRST
+
+**Think ahead: choose the color variants you'll offer BEFORE generating the mockup, then make sure the mockup covers each of those colors.** Mockups are rendered per variant, and same-color variants share one print image — so if you import Black + White but only mockup Black (or "the first N variants", which are all one color), the White variants ship with NO mockup and the product gallery is wrong. The set of colors in the mockups must equal the set of colors in the variants.
+
+- **`ship_product` does this automatically** (v0.3.3+): it resolves your variants first, then renders **one mockup per distinct imported color**. Prefer it for any product with more than one color — it's the whole point of "think ahead."
+- **Split primitives:** `create_product` generates the mockup BEFORE `add_variants`, so it cannot know your exact colors — its auto-derived mockup only samples catalog colors and may miss one you intend to sell. For a specific color set, either pass `mockup_variant_ids` covering exactly the colors you'll import, or (better) use `ship_product`.
+- **Raw REST (Phase 3):** pass a `variant_ids` list with one representative variant per color you plan to offer, not five sizes of a single color.
+- **Rule of thumb:** one garment mockup per color you sell; never leave an offered color with no mockup.
+
+---
+
 ## 8. Pricing discipline — never price below cost + margin
 
 The merchant loses money on negative-margin products. See `references/garment-catalog.md` for current pricing floors per garment.
