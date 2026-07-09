@@ -275,6 +275,19 @@ The MCP does this automatically (a placement with a known face layout = display 
 structural → solid). Building by hand: put the design only on the true display faces and a matching
 solid on everything else. The goal: **every face covered, none blank, none busy/clipped.**
 
+### Seams that cross a face — favor the region that keeps the subject intact
+
+Some goods have a SEAM across an otherwise-flat face: a backpack's front pocket, a tote's
+gusset, a jacket's zipper. A design filling the whole face gets cut in half at the seam. **When
+the design has lettering or a recognizable subject (a face, a player's body, a logo), favor the
+region that keeps it intact — do not let the seam cross it.** For the Printful 279 All-Over Print
+Backpack, the front pocket seam runs across the lower ~40% of the front, so the design sits in the
+**upper-body window above the seam**; the rest of the front and the pocket/side panels get the
+solid background. The full crest reads as one piece instead of being split (the SPAIN backpack cut
+the goalkeeper and "La Roja" in half). **Abstract patterns / textures that read fine when split
+are the exception — those can be printed full-bleed across the seam.** The MCP favors the safe
+region automatically for backpacks; building by hand, inset the subject into the seam-free zone.
+
 ### Cylindrical drinkware (water bottles, tumblers, mugs, glasses)
 
 A bottle/tumbler/mug/glass print area **wraps around the tube**: its top maps onto the
