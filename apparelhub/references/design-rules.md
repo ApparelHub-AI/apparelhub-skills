@@ -189,13 +189,20 @@ After Phase 3 (mockup generation), ALWAYS visually inspect the result before pro
 
 Check for:
 - Design renders correctly (not cut off, not distorted)
+- **Design is UPRIGHT** — text reads normally on the worn/used product. Some templates render the print file rotated 180° (Printful sock leg FRONTS: file-top = toe), so an upright-composed file prints upside down. See `references/all-over-print.md` §9.
+- **Design lands on the visible face** — not straddling a fold/hem/seam (drawstring-bag areas are front+back in one file folded at the bottom) and not wrapped out of view at a silhouette edge (sock strips wrap the leg tube). See `references/all-over-print.md` §9.
+- **Every printable surface is covered** on fill/all-over goods — a placement with no file ships as raw white fabric (socks have 4 leg strips; the AOP backpack has front/top/bottom/pocket). See `references/all-over-print.md` §10.
+- **Vertical position matches the product**: collar breathing room (design top-anchored ~13% down) is an APPAREL concept. On phone cases, mugs, and other non-apparel placed goods the design belongs CENTERED on the face — top-anchored placement reads "too far up" (the MOROCCO clear-case incident). MCP v0.3.6+ centers non-apparel placed goods automatically.
 - Text legible and spelled correctly
 - No white halos around transparent edges
 - No checkerboard artifacts where transparency should be
+- **No chroma-green background anywhere** on the render — green reaching the mockup means the keying background is in the print file
 - Color contrast is acceptable on the chosen garment
 - Design isn't tiny (chest emblem when you wanted chest-filling) or oversized (overflowing the print area)
 
 If anything looks wrong, FIX the design and re-mockup before continuing. Manufacturing follows the mockup.
+
+**Inspect at full resolution, never thumbnail scale** — downscaled previews hide clipped edges, seam straddling, and orientation errors. Crop the print region 1:1 if the mockup is large.
 
 ---
 

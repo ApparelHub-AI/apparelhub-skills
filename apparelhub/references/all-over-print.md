@@ -184,6 +184,53 @@ Generalizes to any all-over-print product where the design uses solid-color regi
 Visually inspect the mockup for:
 - Background reaches all four edges (no white margins)
 - No visible boundary line between background "shades"
+- **Design is UPRIGHT** (text reads normally) — some templates render the print file rotated (see §9)
+- **Design is fully visible on the product face** — not cut off at a fold, hem, or silhouette edge (see §9)
+- **NO unprinted surfaces**: every print placement of the product carries a file; an unprinted placement on an all-over product is raw white fabric (see §10)
+- **NO chroma green anywhere** — if the keying background survived to the print file, stop and recompose
 - For doormats: text reads left-to-right when product is oriented normally
 - For luggage tags: no faux strap hole visible in the design, no faux tag-frame visible inside the print area
 - For pillows: front and back surfaces both look intentional (back can be solid color or complementary graphic — both fine, just not blank)
+
+---
+
+## 9. The print AREA is not always the visible FACE (wrap goods)
+
+Some templates print ONE file across SEVERAL physical surfaces, or render the file in a
+different orientation than you composed it. Centering art on the AREA then lands it on a fold,
+a seam, or upside down. These are empirically calibrated facts (grid-file preview renders
+against the live providers, 2026-07-09 — the WC26 ENGLAND sock + drawstring incidents):
+
+### Sublimation socks (Printful 882 and similar)
+
+- FOUR placements, all 632×2620: `leg_front_right`, `leg_front_left`, `leg_back_right`, `leg_back_left`. Fill ALL of them or the unprinted strips ship as raw white fabric (one printed strip out of four = one decorated sock side, three white).
+- **The FRONT strips render the file ROTATED 180°** (file-top = toe): compose the art upside down in the file so it reads upright on the worn sock.
+- **The BACK strips render the file UPRIGHT** (file-top = cuff): compose those files normally. One rotated file on all four strips prints upside down on the backs.
+- The strip wraps the leg tube — only the central ~64% of the width stays frontal. Art wider than that clips at the silhouette (art at 86% width = visibly cut-off text). Keep art within x 0.18–0.82 of the strip.
+
+### Drawstring bags (Printify blueprint 414 and similar wrap templates)
+
+- The single `front` area (4950×11100 ≈ 16.5"×37" — note the extreme aspect) is the **front + back in one file, folded at the bottom**. Art centered on the AREA straddles the fold and prints cut off at the hem.
+- The visible front = the **top ~50%** of the file; the drawstring channel eats the top ~5% and grommet corner cuts start at ~45%. Compose art centered within y 0.05–0.43; let the background fill the whole file (the back comes out solid — retail-correct).
+
+### The generic rule
+
+A fill/all-over print area with an extreme aspect (≤ 1:2 or ≥ 2.2:1) that isn't a known
+strip/banner product is a SUSPECT WRAP — assume a fold or seam crosses it. Run a preview render
+and check where the art actually lands BEFORE building the product; never trust a blind center.
+
+The ApparelHub MCP server (v0.3.6+) applies these face layouts + rotations automatically for
+`print_style: "fill"`. If you build print_data by hand against the raw API, you must replicate
+them yourself.
+
+---
+
+## 10. Cover EVERY placement — and match each file to its placement's orientation
+
+`GET /agents/v1/merchandise/<provider_uuid>/product/<ref>` lists every placement under the
+variant's `templates[]`. For fill/all-over goods:
+
+- **Same-size sibling placements** (the other sock strips) get an art file composed for THAT placement's orientation (see §9 — sock fronts and backs differ).
+- **Different-size siblings** (backpack `top` 3000×857 / `bottom` 2999×535 / `pocket` 2060×1269 on Printful 279) get a **solid canvas in the art's background color** — a solid color stretches to any aspect losslessly, so one file serves all of them. Leaving them out is what shipped the SPAIN backpack with white bands.
+- Embroidery placements are never part of a fill set.
+- The mockup preview call should carry the SAME template list, so the render proves the coverage.
