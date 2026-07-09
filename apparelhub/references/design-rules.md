@@ -192,6 +192,8 @@ Check for:
 - **Design is UPRIGHT** — text reads normally on the worn/used product. Some templates render the print file rotated 180° (Printful sock leg FRONTS: file-top = toe), so an upright-composed file prints upside down. See `references/all-over-print.md` §9.
 - **Design lands on the visible face** — not straddling a fold/hem/seam (drawstring-bag areas are front+back in one file folded at the bottom) and not wrapped out of view at a silhouette edge (sock strips wrap the leg tube). See `references/all-over-print.md` §9.
 - **Every printable surface is covered** on fill/all-over goods — a placement with no file ships as raw white fabric (socks have 4 leg strips; the AOP backpack has front/top/bottom/pocket). See `references/all-over-print.md` §10.
+- **No blank or half-covered faces on multi-face / multi-piece merch** — wallets print on the front AND back exterior (a centered design splits at the spine), headphone ear cups both get the design, duffles have no bare far side. Check every face/piece in the mockup. See `references/all-over-print.md` §9.
+- **Resolution is sufficient** — a soft/pixelated print or a platform "low resolution" block means the design shrank too small after keying/cropping. Regenerate at higher resolution (or upscale to the print area). See `references/all-over-print.md` §11.
 - **Vertical position matches the product**: collar breathing room (design top-anchored ~13% down) is an APPAREL concept. On phone cases, mugs, and other non-apparel placed goods the design belongs CENTERED on the face — top-anchored placement reads "too far up" (the MOROCCO clear-case incident). MCP v0.3.6+ centers non-apparel placed goods automatically.
 - Text legible and spelled correctly
 - No white halos around transparent edges
