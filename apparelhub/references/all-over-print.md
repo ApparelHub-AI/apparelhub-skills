@@ -267,13 +267,19 @@ The rule: **multi-face merch gets the design on ALL faces — never a blank or h
 When a product has several print placements, decide per placement:
 - **Display face** — a surface the design belongs on (sock leg strips, both headphone cups, a
   wallet's front+back, a duffle's front). Compose the design onto it (windowed/inset as needed).
-- **Structural panel** — a wrap/utility surface (duffle sides/top/bottom/pocket, backpack
-  top/bottom/pocket, an interior label). Fill it with the **solid background** derived from the
-  design's palette. Never leave it blank/white; never stamp the full design across it.
+- **Structural panel** — an EXTERIOR wrap/utility surface (duffle sides/top/bottom/pocket, backpack
+  top/bottom/pocket). Fill it with the **solid background** derived from the design's palette. Never
+  leave it blank/white; never stamp the full design across it.
+- **Interior / label surface** — an INSIDE face or a care/brand label (`inside_*`, `page*`,
+  `label_*`: a journal's inside cover + pages, a reversible bucket hat's inside faces, care labels).
+  Leave these **BLANK / unprinted** — do NOT solid-fill them (inking every inside page of a journal
+  with the design's background is wrong) and do NOT put the design on them.
 
-The MCP does this automatically (a placement with a known face layout = display face; otherwise
-structural → solid). Building by hand: put the design only on the true display faces and a matching
-solid on everything else. The goal: **every face covered, none blank, none busy/clipped.**
+The MCP does this automatically: a placement with a known face layout = display face; an exterior
+placement with no layout → solid; `inside_*`/`page*`/`label_*` → dropped (blank). Building by hand:
+put the design on the true display faces, a matching solid on exterior structural panels, and leave
+interior/label surfaces unprinted. The goal: **every EXTERIOR face covered, none blank, none
+busy/clipped; interior/label surfaces left default.**
 
 ### Seams that cross a face — favor the region that keeps the subject intact
 
@@ -293,11 +299,48 @@ region automatically for backpacks; building by hand, inset the subject into the
 A bottle/tumbler/mug/glass print area **wraps around the tube**: its top maps onto the
 shoulder/neck, its bottom onto the base, and its left/right around the sides out of frontal view.
 A design that fills the area clips at every edge — the MOROCCO water bottle cut the flag star at
-the top and "MOROCCO" at the base. **Inset the design into the flat frontal band** (roughly the
-central ~68% width, y 0.13–0.85) with margin so no element touches a wrapping edge. These are
-"placed" goods (design on the bare surface), so compose the inset on a transparent canvas. The MCP
-does this automatically for drinkware; building by hand, size the design to the central band and
-keep clear of the top/bottom/side edges.
+the top and "MOROCCO" at the base. **Inset the design into the flat frontal band** with margin so
+no element touches a wrapping edge. These are "placed" goods (design on the bare surface), so
+compose the inset on a transparent canvas.
+
+**How much to inset depends on the diameter** — the front-facing arc is narrower on a small mug
+than on a fat bottle:
+
+- **Tall bottles / tumblers / glasses / cans** — front arc ≈ central **~68% width**, y 0.13–0.85.
+- **Mugs / steins** — the wrap circumference is large relative to the small diameter, so the
+  front-facing arc is only the central **~44% width** (horizontal-stripe-probe calibrated on the
+  Black Glossy Mug: the front is stripes 3–6 of 8, i.e. area x 0.25–0.75). A bottle-width inset on
+  a mug wraps the design's edges around the sides out of view. Keep a mug design in x 0.28–0.72,
+  y 0.12–0.88, centered.
+
+The MCP does this automatically (mugs/steins get the tighter inset; other drinkware the looser
+one); building by hand, size the design to the central band and keep clear of the top/bottom/side
+edges.
+
+### Tote bags with a bottom fold (Printful 274 and similar tall-aspect wrap totes)
+
+- The single `default` area (e.g. 1701×3000, tall aspect ~0.57) is the **front + back folded at
+  the bottom** — same shape as a drawstring bag. A subject centered on the area is clipped at the
+  fold. Compose art into the **top ~45%** (the visible front); the background fills the rest, and
+  the pocket (if any) gets the solid background. Short/square totes that are a single front panel
+  don't need this — the tell is the tall aspect.
+
+### Softcover journals / notebooks (Printful 1013 and similar)
+
+- The `outside_cover` area (e.g. 2968×1978) is **back cover + spine + front cover laid flat**. A
+  design centered on the area lands ON THE SPINE and is cut by the crease. Compose art onto the
+  **FRONT cover = the RIGHT half** (area x 0.5–1.0, e.g. x 0.54–0.94), clear of the spine at x≈0.5;
+  the back cover + spine take the solid background.
+- **Inside cover + pages print BLANK** — do NOT fill them with the design background (see the
+  "interior surfaces" note below).
+
+### Bucket hats (Printful 654 and similar)
+
+- The `outside_front` crown is a **small, tightly-curved dome**. A full-bleed design wraps over the
+  crown top (upper part foreshortened, facing up) and down onto the brim (lower part folded). Only
+  a small central band stays flat-frontal. Confine art to the **flat front-crown band** (roughly
+  x 0.33–0.67, y 0.42–0.58, centered) — a full ring or tall subject wraps over the crown/brim.
+  Bucket-hat front prints are physically small; don't fight it.
 
 ### The generic rule
 
