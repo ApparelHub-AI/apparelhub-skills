@@ -23,7 +23,8 @@ this skill when the user wants to:
 - Manage orders and fulfillment via Printful / Printify
 - Browse the catalog of garments available for printing
 
-You talk to ApparelHub via its Agent API at
+When you drive the platform over raw HTTP (the fallback path — see the
+callout just below), you talk to ApparelHub via its Agent API at
 `https://api.apparelhub.ai/agents/v1/`. That's the only host this skill
 ever sends an API key to.
 
@@ -36,6 +37,45 @@ tailored to you under `porting-guides/` in the same repo.
 This SKILL.md is the router. Detailed playbooks live in `references/`
 and end-to-end walkthroughs in `examples/`. Load them on demand. Don't
 try to memorize the entire skill upfront.
+
+---
+
+## 0. First — if the ApparelHub connector is attached, use its tools
+
+**If this session already has the ApparelHub MCP connector available — i.e.
+you can see ApparelHub tools such as `design_apparel`, `ship_product`,
+`generate_image`, `create_product`, `process_transparency`,
+`verify_design_quality`, `get_garment_details`, or `sync_to_fulfillment` —
+then call those tools directly and treat the rest of this skill as reference
+knowledge only.** The connector takes precedence over the raw-HTTP pipeline
+documented below. It is the execution surface; this skill is the knowledge
+layer plus the no-connector fallback.
+
+In connector mode:
+
+- **Build with the high-level workflow tools first.** `design_apparel` makes a
+  print-ready design; `ship_product` goes from a design to a finished,
+  store-mapped product in ONE call (mockup → create → variants → associate →
+  fulfillment sync). Reach for the atomic tools (`generate_image`,
+  `process_transparency`, `add_variants`, `sync_to_fulfillment`,
+  `sync_to_channel`, …) only for partial or interactive flows.
+- **Do NOT re-implement the local pipeline this skill documents below.** No
+  `ah_curl` / raw `curl` calls, no `make_transparent.py` chroma-keying, no
+  `ah_poll_mockup` polling, no fetching mockup images yourself. The connector
+  runs transparency processing, mockup rendering, variant resolution, face
+  layouts, and image hosting **server-side**. Redoing that work by hand is what
+  strips leaves out of a design, clips lettering, and dead-ends on blocked
+  image CDNs — the exact failures the manual path keeps hitting.
+- **Use the reference files (`references/`, `examples/`) for the WHY, not the
+  HOW** — garment quirks, design rules, pricing, catalog facts, error decoding.
+  The connector already encodes how to make the calls; the references explain
+  what a good result looks like. When a connector tool returns a structured
+  error code, decode it with `references/error-handling.md`.
+
+**Everything from "## 1. Authentication" onward is the raw Agent API
+fallback** — for runtimes that have only an `APPARELHUB_API_KEY` and no
+connector (bare HTTP, some Claude Code setups, ChatGPT / Gemini via the
+porting guides). If you have the connector, you don't need any of it.
 
 ---
 
