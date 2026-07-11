@@ -220,150 +220,48 @@ Rules:
 
 ---
 
-## 9. The print AREA is not always the visible FACE (wrap goods)
+## 9. Wrap / multi-face placement is handled by the platform — request `print_style: auto`
 
-Some templates print ONE file across SEVERAL physical surfaces, or render the file in a
-different orientation than you composed it. Centering art on the AREA then lands it on a fold,
-a seam, or upside down. These are empirically calibrated facts (grid-file preview renders
-against the live providers, 2026-07-09 — the WC26 ENGLAND sock + drawstring incidents):
+The print AREA is not always the visible FACE: some templates print one file across several
+physical surfaces (sock legs; a drawstring bag or tall tote folded at the bottom; a wallet's
+front+back; a notebook's back+spine+front; a duffle's panels), wrap it around a tube (mugs,
+bottles, tumblers, glasses, candles), cross a face with a seam (a backpack's pocket), foreshorten
+it over a dome (bucket hats, beanies), or render it inverted. Hand-placing art on the AREA lands it
+on a fold/seam, wrapped off the sides, or upside down.
 
-### Sublimation socks (Printful 882 and similar)
+**You no longer compute any of this.** The platform composes the correct per-placement print files
+server-side — face windows, per-face rotation, solid structural panels, transparent per-face wraps,
+interior/label blanking, seam-avoidance, and cylinder/dome insets — from a continuously-updated
+calibration set (new garment fixes ship as platform DATA, so the tools improve with no client
+update). Just:
 
-- FOUR placements, all 632×2620: `leg_front_right`, `leg_front_left`, `leg_back_right`, `leg_back_left`. Fill ALL of them or the unprinted strips ship as raw white fabric (one printed strip out of four = one decorated sock side, three white).
-- **The FRONT strips render the file ROTATED 180°** (file-top = toe): compose the art upside down in the file so it reads upright on the worn sock.
-- **The BACK strips render the file UPRIGHT** (file-top = cuff): compose those files normally. One rotated file on all four strips prints upside down on the backs.
-- The strip wraps the leg tube — only the central ~64% of the width stays frontal. Art wider than that clips at the silhouette (art at 86% width = visibly cut-off text). Keep art within x 0.18–0.82 of the strip.
+- Use **`ship_product`** or **`create_product`** (or call **`prepare-print-data`** directly) with
+  **`print_style: "auto"`** (the default). The platform picks fill-vs-placed, composes EVERY
+  non-interior placement, and returns `print_data` you pass straight to product-create + the mockup.
+  `print_style: "fill"` / `"placed"` override only if you deliberately want one.
 
-### Drawstring bags (Printify blueprint 414 and similar wrap templates)
+### You STILL own the quality gate (unchanged)
 
-- The single `front` area (4950×11100 ≈ 16.5"×37" — note the extreme aspect) is the **front + back in one file, folded at the bottom**. Art centered on the AREA straddles the fold and prints cut off at the hem.
-- The visible front = the **top ~50%** of the file; the drawstring channel eats the top ~5% and grommet corner cuts start at ~45%. Compose art centered within y 0.05–0.43; let the background fill the whole file (the back comes out solid — retail-correct).
+Composition is automatic; VERIFYING it is still your job. After the mockup renders, inspect it at
+full resolution (§8) and confirm:
+- **Upright** — no face/panel rendered rotated or mirrored.
+- **No clipped lettering / subject** — nothing cut by a fold, seam, or the print edge; nothing
+  wrapped off the sides of a mug/hat.
+- **Every placement covered** — no blank/white face on a multi-surface product; interior/label
+  surfaces (`inside_*`, `page*`, `label_*`) correctly left unprinted (NOT solid-filled).
+- **Not busy/clipped** — structural panels (backpack top/bottom/pocket, duffle sides) read as a
+  clean solid, not the full design plastered across them.
 
-### Multi-FACE wraps: the design goes on EVERY face (no blank faces)
-
-Some wrap areas carry MORE THAN ONE physical face in a single print file. Centering the art
-lands it across the FOLD between faces, splitting it, and leaves each face with half a design.
-The rule: **multi-face merch gets the design on ALL faces — never a blank or half-covered face.** Grid-calibrated cases:
-
-- **Zipper / passport wallets** (Printify 708, ~2482×2756, near-square): the area is the front
-  AND back exterior folded at the bottom. The front face is the TOP half (renders upright); the
-  back face is the BOTTOM half and renders ROTATED 180° past the fold. Compose the design onto
-  BOTH halves — upright on top, pre-rotated on the bottom so it reads upright on the back. A
-  centered design prints split down the spine (the BELGIUM wallet).
-- **Headphone ear-cup shells** (Printify 1666, AirPods Max): the Left and Right cups are SEPARATE
-  oval faces (separate placements, same size). Put the design on BOTH — one printed cup next to a
-  blank one reads broken (the BELGIUM headphones). Because the face is an oval, inset the art
-  (~68% width, centered) so it doesn't clip at the cup edge.
-- **Duffles** (Printful 465): the FRONT is the hero display face; keep its art in the central
-  frontal window (~x 0.12–0.88, y 0.15–0.75) — it wraps past the top seam, under the base, and
-  around the rounded ends, so full-width art clips (the NORWAY duffle). The other panels
-  (back/sides/top/bottom/pocket) are STRUCTURAL — give them the **solid background**, NEVER the
-  design plastered full-bleed (busy + clipped) and NEVER bare fabric (the NORWAY white strip).
-  Every panel must be covered; only the front carries the design (a merchant can request the design
-  on the back too).
-
-### DISPLAY faces vs STRUCTURAL panels (the "no white strip, no design-everywhere" rule)
-
-When a product has several print placements, decide per placement:
-- **Display face** — a surface the design belongs on (sock leg strips, both headphone cups, a
-  wallet's front+back, a duffle's front). Compose the design onto it (windowed/inset as needed).
-- **Structural panel** — an EXTERIOR wrap/utility surface (duffle sides/top/bottom/pocket, backpack
-  top/bottom/pocket). Fill it with the **solid background** derived from the design's palette. Never
-  leave it blank/white; never stamp the full design across it.
-- **Interior / label surface** — an INSIDE face or a care/brand label (`inside_*`, `page*`,
-  `label_*`: a journal's inside cover + pages, a reversible bucket hat's inside faces, care labels).
-  Leave these **BLANK / unprinted** — do NOT solid-fill them (inking every inside page of a journal
-  with the design's background is wrong) and do NOT put the design on them.
-
-The MCP does this automatically: a placement with a known face layout = display face; an exterior
-placement with no layout → solid; `inside_*`/`page*`/`label_*` → dropped (blank). Building by hand:
-put the design on the true display faces, a matching solid on exterior structural panels, and leave
-interior/label surfaces unprinted. The goal: **every EXTERIOR face covered, none blank, none
-busy/clipped; interior/label surfaces left default.**
-
-### Seams that cross a face — favor the region that keeps the subject intact
-
-Some goods have a SEAM across an otherwise-flat face: a backpack's front pocket, a tote's
-gusset, a jacket's zipper. A design filling the whole face gets cut in half at the seam. **When
-the design has lettering or a recognizable subject (a face, a player's body, a logo), favor the
-region that keeps it intact — do not let the seam cross it.** For the Printful 279 All-Over Print
-Backpack, the front pocket seam runs across the lower ~40% of the front, so the design sits in the
-**upper-body window above the seam**; the rest of the front and the pocket/side panels get the
-solid background. The full crest reads as one piece instead of being split (the SPAIN backpack cut
-the goalkeeper and "La Roja" in half). **Abstract patterns / textures that read fine when split
-are the exception — those can be printed full-bleed across the seam.** The MCP favors the safe
-region automatically for backpacks; building by hand, inset the subject into the seam-free zone.
-
-### Cylindrical drinkware (water bottles, tumblers, mugs, glasses)
-
-A bottle/tumbler/mug/glass print area **wraps around the tube**: its top maps onto the
-shoulder/neck, its bottom onto the base, and its left/right around the sides out of frontal view.
-A design that fills the area clips at every edge — the MOROCCO water bottle cut the flag star at
-the top and "MOROCCO" at the base. **Inset the design into the flat frontal band** with margin so
-no element touches a wrapping edge. These are "placed" goods (design on the bare surface), so
-compose the inset on a transparent canvas.
-
-**How much to inset depends on the diameter** — the front-facing arc is narrower on a small mug
-than on a fat bottle:
-
-- **Tall bottles / tumblers / glasses / cans** — front arc ≈ central **~68% width**, y 0.13–0.85.
-- **Mugs / steins** — the wrap circumference is large relative to the small diameter, so the
-  front-facing arc is only the central **~44% width** (horizontal-stripe-probe calibrated on the
-  Black Glossy Mug: the front is stripes 3–6 of 8, i.e. area x 0.25–0.75). A bottle-width inset on
-  a mug wraps the design's edges around the sides out of view. Keep a mug design in x 0.28–0.72,
-  y 0.12–0.88, centered.
-
-The MCP does this automatically (mugs/steins get the tighter inset; other drinkware the looser
-one); building by hand, size the design to the central band and keep clear of the top/bottom/side
-edges.
-
-### Tote bags with a bottom fold (Printful 274 and similar tall-aspect wrap totes)
-
-- The single `default` area (e.g. 1701×3000, tall aspect ~0.57) is the **front + back folded at
-  the bottom** — same shape as a drawstring bag. A subject centered on the area is clipped at the
-  fold. Compose art into the **top ~45%** (the visible front); the background fills the rest, and
-  the pocket (if any) gets the solid background. Short/square totes that are a single front panel
-  don't need this — the tell is the tall aspect.
-
-### Softcover journals / notebooks (Printful 1013 and similar)
-
-- The `outside_cover` area (e.g. 2968×1978) is **back cover + spine + front cover laid flat**. A
-  design centered on the area lands ON THE SPINE and is cut by the crease. Compose art onto the
-  **FRONT cover = the RIGHT half** (area x 0.5–1.0, e.g. x 0.54–0.94), clear of the spine at x≈0.5;
-  the back cover + spine take the solid background.
-- **Inside cover + pages print BLANK** — do NOT fill them with the design background (see the
-  "interior surfaces" note below).
-
-### Bucket hats (Printful 654 and similar)
-
-- The `outside_front` crown is a **small, tightly-curved dome**. A full-bleed design wraps over the
-  crown top (upper part foreshortened, facing up) and down onto the brim (lower part folded). Only
-  a small central band stays flat-frontal. Confine art to the **flat front-crown band** (roughly
-  x 0.33–0.67, y 0.42–0.58, centered) — a full ring or tall subject wraps over the crown/brim.
-  Bucket-hat front prints are physically small; don't fight it.
-
-### The generic rule
-
-A fill/all-over print area with an extreme aspect (≤ 1:2 or ≥ 2.2:1) that isn't a known
-strip/banner product is a SUSPECT WRAP — assume a fold or seam crosses it. A near-square area on a
-folding good (wallets, passport covers) is a SUSPECT TWO-FACE wrap. Any product with more than one
-same-size print placement (ear cups, cufflinks, two-panel goods) needs the design on EVERY piece.
-Run a preview render and check where the art actually lands — and that no face is blank — BEFORE
-building the product; never trust a blind center.
-
-The ApparelHub MCP server (v0.3.7+) applies these face layouts, rotations, multi-face composition,
-and multi-piece replication automatically. If you build print_data by hand against the raw API,
-you must replicate them yourself: enumerate every placement in the garment's `templates[]`, and
-give each face/piece a file.
+If a wrap/multi-face good composes wrong, report the garment ref + what clipped — the fix is a
+platform calibration update (a data change), not something you patch in `print_data` by hand.
 
 ---
 
-## 10. Cover EVERY placement — and match each file to its placement's orientation
+## 10. Cover EVERY placement — the platform does this; the mockup proves it
 
-`GET /agents/v1/merchandise/<provider_uuid>/product/<ref>` lists every placement under the
-variant's `templates[]`. For fill/all-over goods:
-
-- **Same-size sibling placements** (the other sock strips) get an art file composed for THAT placement's orientation (see §9 — sock fronts and backs differ).
-- **Different-size siblings** (backpack `top` 3000×857 / `bottom` 2999×535 / `pocket` 2060×1269 on Printful 279) get a **solid canvas in the art's background color** — a solid color stretches to any aspect losslessly, so one file serves all of them. Leaving them out is what shipped the SPAIN backpack with white bands.
-- Embroidery placements are never part of a fill set.
-- The mockup preview call should carry the SAME template list, so the render proves the coverage.
+For fill / all-over goods the design must reach every exterior surface (an unprinted placement is
+raw white fabric — the SPAIN backpack white bands). The platform covers the full placement set
+automatically when you use `ship_product` / `create_product` / `prepare-print-data`: display faces
+get the composed art, exterior structural panels get a matching solid, embroidery + interior/label
+placements are excluded. The mockup preview carries the same placement set, so the render PROVES
+the coverage — confirm no exterior face is blank before you ship.
