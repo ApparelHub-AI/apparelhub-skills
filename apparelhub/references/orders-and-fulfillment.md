@@ -297,3 +297,41 @@ response is a structured summary — it never throws for the normal skip cases:
 Settings → Order sync, or `PATCH /store/<uuid>/settings`). When on, a background
 worker reconciles the store's open sales-channel orders on a schedule. The manual
 call above always works regardless of that setting.
+
+## 12. Edit a draft order's items (add another variant before confirm)
+
+You can add or remove items on an order **while it is still a DRAFT** (before it
+is confirmed to production) — e.g. add another color/size of the same product.
+This is the ONLY window for editing items; once the order is confirmed / in
+production it is locked.
+
+```
+# Add an item (e.g. another variant of the same product)
+POST /agents/v1/orders/<order_uuid>/items      {"variant_uuid": "...", "quantity": 1}
+
+# Remove a line item (order must keep at least one)
+DELETE /agents/v1/orders/<order_uuid>/items/<order_item_id>
+
+# Replace the whole item set (bulk / quantity edits)
+PUT /agents/v1/orders/<order_uuid>/items       {"items": [{"variant_uuid": "...", "quantity": 2}]}
+```
+
+MCP tools: `add_order_item`, `remove_order_item`.
+
+**How each provider applies the edit (automatic — you don't choose):**
+
+| Provider | Under the hood |
+|----------|----------------|
+| Printful, Gelato | Edits the existing provider draft **in place** (same order id). |
+| Printify | No edit API, so it **cancels + re-creates** the order (a NEW order id). Nothing is charged on a draft, so this is safe. |
+
+The order detail carries **`supports_in_place_order_edit`** (true = in place;
+false = will cancel + re-create) so you can tell the user in advance. The edit
+result's **`edit_method`** is `in_place`, `recreated` (with a new
+`fulfillment_external_id`), or `local` (no provider draft yet).
+
+**Errors:** `409 order_not_editable` (already confirmed — not editable),
+`409 variant_not_synced` (sync the product first), `403 variant_not_in_store`,
+`400 items_empty` (can't remove the last item — cancel the order instead),
+`502 provider_edit_failed` (retry-eligible). Editing never touches the
+create/submit/confirm flow — it only changes the draft's items and re-prices.
