@@ -307,16 +307,27 @@ production it is locked.
 
 ```
 # Add an item (e.g. another variant of the same product)
-POST /agents/v1/orders/<order_uuid>/items      {"variant_uuid": "...", "quantity": 1}
+POST /agents/v1/orders/<order_uuid>/items      {"variant_uuid": "...", "quantity": 1, "custom_price": 24.99, "shipping_cost": 5.00}
 
 # Remove a line item (order must keep at least one)
 DELETE /agents/v1/orders/<order_uuid>/items/<order_item_id>
 
 # Replace the whole item set (bulk / quantity edits)
-PUT /agents/v1/orders/<order_uuid>/items       {"items": [{"variant_uuid": "...", "quantity": 2}]}
+PUT /agents/v1/orders/<order_uuid>/items       {"items": [{"variant_uuid": "...", "quantity": 2, "custom_price": 24.99}], "shipping_cost": 5.00}
 ```
 
-MCP tools: `add_order_item`, `remove_order_item`.
+**Pricing on an edit (optional):**
+- **`custom_price`** — per **item**, the per-unit retail price. Omit it and the
+  item uses the variant's own price. (This is the retail price the customer pays;
+  for Printful/Gelato it also flows to the provider draft as the retail price.)
+- **`shipping_cost`** / **`tax`** — per **order** (top-level, not per item), the
+  order-level retail shipping and tax. These are what the customer pays, NOT the
+  provider's own shipping cost (the provider computes that itself). Omit them and
+  the order's existing shipping/tax are preserved. The order total is always
+  re-priced as `subtotal + shipping_cost + tax`. Negative values are rejected.
+
+MCP tools: `add_order_item` (accepts `custom_price` + `shipping_cost`),
+`remove_order_item`.
 
 **How each provider applies the edit (automatic — you don't choose):**
 
