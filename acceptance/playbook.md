@@ -148,7 +148,7 @@ Automated where possible; manual otherwise.
 ### 5a. ah_curl deleted
 
 ```bash
-test ! -e /src/apparelhub-skills/apparelhub/scripts/ah_curl
+test ! -e ~/apparelhub-skills/apparelhub/scripts/ah_curl
 ```
 
 Pass: ah_curl is gone.
@@ -156,7 +156,7 @@ Pass: ah_curl is gone.
 ### 5b. No `APPARELHUB_API_BASE` reads
 
 ```bash
-grep -rE 'APPARELHUB_API_BASE' /src/apparelhub-skills/apparelhub /src/apparelhub-skills/claude-code /src/apparelhub-skills/install.sh
+grep -rE 'APPARELHUB_API_BASE' ~/apparelhub-skills/apparelhub ~/apparelhub-skills/claude-code ~/apparelhub-skills/install.sh
 ```
 
 Pass: no hits, OR every hit is inside a comment that explicitly says
@@ -178,8 +178,8 @@ environment variable.
 For each helper that makes a network call:
 
 ```bash
-grep -E 'api\.apparelhub\.ai' /src/apparelhub-skills/apparelhub/scripts/ah_check
-grep -E 'api\.apparelhub\.ai' /src/apparelhub-skills/apparelhub/scripts/ah_poll_mockup
+grep -E 'api\.apparelhub\.ai' ~/apparelhub-skills/apparelhub/scripts/ah_check
+grep -E 'api\.apparelhub\.ai' ~/apparelhub-skills/apparelhub/scripts/ah_poll_mockup
 ```
 
 Pass: the canonical host appears as a literal in each network-making
@@ -188,7 +188,7 @@ script. No env-var lookup for the base URL.
 ### 5e. install.sh does not write .env by default
 
 ```bash
-( HOME=$(mktemp -d) APPARELHUB_API_KEY=bogus bash /src/apparelhub-skills/install.sh </dev/null; \
+( HOME=$(mktemp -d) APPARELHUB_API_KEY=bogus bash ~/apparelhub-skills/install.sh </dev/null; \
   test ! -e "$HOME/.apparelhub-skills/.env" && echo OK )
 ```
 
@@ -201,7 +201,7 @@ Pass: prints `OK`. (Installer should not write `.env` without `--persist`.)
 Same patterns the CI workflow enforces, run locally before tagging:
 
 ```bash
-cd /src/apparelhub-skills
+cd ~/apparelhub-skills
 grep -rnEi 'simple_expansion|expansion-free|allowlist-clean' \
   --include='*.md' --include='*.sh' --include='ah_*' --include='*.py' \
   apparelhub claude-code porting-guides install.sh README.md SECURITY.md
