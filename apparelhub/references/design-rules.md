@@ -173,6 +173,60 @@ Default to img2img-via-gallery mode (mode 2 in the table above). It's the cheape
 
 ---
 
+## 5c. Aspect ratios — matching the print area
+
+A design should match the SHAPE of the product's print area. A square design centered on a tall phone case or poster leaves the top and bottom of the print area empty (or, on full-bleed goods, shows bare substrate at the margins). Two ways to get the right shape:
+
+### Generate at the aspect that matches the product
+
+`POST /agents/v1/images/generate` accepts a `size` that sets the output aspect ratio:
+
+| `size` | Aspect | Shape | Reach for it when… |
+|---|---|---|---|
+| `1024x1024` | 1:1 | Square | Chest prints, front-print tees/hoodies, most standard placements |
+| `1024x1792` | 9:16 | Tall / portrait | Phone cases, posters, tall banners, portrait wall art |
+| `1792x1024` | 16:9 | Wide / landscape | Landscape banners, mugs (wraparound strip), doormats, wide wall art |
+
+Match the size to the product up front so the design is born the right shape — cheaper and cleaner than fixing it afterward. **Full-bleed / all-over goods** (phone cases, AOP tees, posters) want a design that FILLS the print area edge to edge, so generate at the print area's aspect (usually tall for a phone case) rather than square. When you already know the target product, pick its `size` in Phase 1. See `references/all-over-print.md` §12 for the per-product mapping.
+
+Generating at a larger size is also how you keep resolution up for large-format goods (prefer 1792 on the long side over 1024) — see `references/all-over-print.md` §11.
+
+### Fit an EXISTING design to an aspect — `POST /images/generated/<uuid>/fit-aspect` (quota-free)
+
+When the design already exists (in the gallery, or the user liked a square one) but the shape is wrong for the product, reshape it WITHOUT burning an image generation:
+
+```
+POST /agents/v1/images/generated/<uuid>/fit-aspect
+{ "aspect": "9:16", "mode": "pad", "background": "#000000" }
+```
+
+- **`aspect`** (required): target ratio as `"W:H"` numbers — `"1:1"`, `"9:16"`, `"16:9"`, `"4:5"`, `"3:4"`, `"4:3"`, etc. (any ratio up to 20:1).
+- **`mode`**:
+  - **`pad`** (default) — letterboxes the whole design onto a larger canvas at the target ratio. **Keeps the entire design** (nothing cropped away); the added margin is filled with `background`.
+  - **`crop`** — center-crops the design to the target ratio. **Trims** whatever falls outside the ratio (edges of the design are lost). Use only when losing the outer edges is acceptable.
+- **`background`** (optional, `pad` only): pad fill as `#RRGGBB` hex. Defaults to **transparent** — leave it transparent for a standard front-print design (garment color shows through the letterbox), or set a solid color for an all-over / full-bleed good so the margin matches the design's own background.
+
+It returns a **NEW gallery image** (the source is untouched), so you can use the fit result downstream and still keep the original.
+
+**Quota-free vs regenerating.** `fit-aspect` is metered as `storage`, NOT as an image generation — it does a local pad/crop, so it does not consume the user's image-generation quota. Regenerating the design at a different `size` (or an AI border-extension via `/images/generate`) DOES consume a generation. So when the pixels are already right and only the shape is wrong, prefer `fit-aspect`; only regenerate when you actually need new/extended content, not just a reshape.
+
+```bash
+# Reshape an existing square design to tall 9:16 for a phone case, letterboxed on black.
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>/fit-aspect" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
+  "aspect": "9:16",
+  "mode": "pad",
+  "background": "#000000"
+}'
+# -> 200 { "image": { "uuid": "...", "url": "..." }, "source_image_uuid": "<uuid>",
+#          "aspect": "9:16", "mode": "pad",
+#          "dimensions": { "original": {...}, "result": {...} } }
+```
+
+**`fit-aspect` reshapes; it does not extend content.** `pad` adds blank margin (it doesn't paint new artwork into it) and `crop` throws pixels away. If the user wants the design's scene to actually EXTEND into a new aspect (outpainting — more sky above, more field to the sides), that's an AI job: regenerate via `/images/generate` (which consumes a generation), not `fit-aspect`.
+
+---
+
 ## 6. Color discipline — max 4 colors per design
 
 More than 4 color variants per design creates SKU sprawl that hurts conversion. Pick the 4 best colors for the design and stop.

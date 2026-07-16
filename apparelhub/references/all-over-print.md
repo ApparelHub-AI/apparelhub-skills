@@ -265,3 +265,67 @@ automatically when you use `ship_product` / `create_product` / `prepare-print-da
 get the composed art, exterior structural panels get a matching solid, embroidery + interior/label
 placements are excluded. The mockup preview carries the same placement set, so the render PROVES
 the coverage — confirm no exterior face is blank before you ship.
+
+---
+
+## 12. Match the design's aspect ratio to the print area
+
+Full-bleed and all-over goods want a design that FILLS the print area edge to edge. A square
+design centered on a TALL print area (a phone case, a portrait poster) leaves bare substrate at
+the top and bottom; a square design on a WIDE area (a landscape banner, a mug wrap) leaves it at
+the sides. Get the shape right — two ways:
+
+### Generate at the print area's aspect (Phase 1)
+
+`POST /images/generate` takes a `size` that sets the output aspect ratio:
+
+| `size` | Aspect | Products it fits |
+|---|---|---|
+| `1024x1024` | 1:1 (square) | Pillows (18×18 / 22×22), square wall art, luggage tags-ish squares |
+| `1024x1792` | 9:16 (tall) | Phone cases, portrait posters, tall banners |
+| `1792x1024` | 16:9 (wide) | Landscape doormats, mug wraparound strips, wide banners, landscape wall art |
+
+When you already know the product, pick the matching `size` in Phase 1 so the design is born the
+right shape. This is also how you keep resolution up on large-format goods (a tall or wide design
+puts 1792px on the long side vs 1024px for a square) — see §11.
+
+Note: this is the print-area SHAPE, not exact pixels. The final print file still fills the full
+`area_width` × `area_height` (§4); the platform composes it. Generating at the closest aspect
+(tall/wide/square) minimizes stretch and cropping when it does.
+
+### Reshape an existing design — `fit-aspect` (quota-free)
+
+If a design already exists (a square one the user liked, or a gallery image) but its shape is
+wrong for the product, reshape it WITHOUT spending an image generation:
+
+```
+POST /agents/v1/images/generated/<uuid>/fit-aspect
+{ "aspect": "9:16", "mode": "pad", "background": "#RRGGBB" }
+```
+
+- **`mode: "pad"`** letterboxes the whole design onto the target ratio (keeps everything). For an
+  all-over / full-bleed good, set **`background`** to the design's OWN background color so the added
+  margin blends in and the product still reads edge-to-edge (a transparent pad would show white
+  substrate at the margins on a fill good — not what you want here).
+- **`mode: "crop"`** center-crops to the ratio (trims the outer edges). Use when the design's
+  content is centered and losing the margins is fine.
+- Returns a NEW gallery image; the source is untouched.
+
+`fit-aspect` is metered as `storage`, NOT an image generation, so reshaping an existing design is
+free of the generation quota — prefer it over regenerating when only the shape is wrong. Full
+contract + the pad-vs-crop trade-off is in `references/design-rules.md` §5c.
+
+```bash
+# Reshape a square all-over design to a wide 16:9 for a landscape doormat,
+# padding the margin with the design's own dark-brown background.
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>/fit-aspect" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
+  "aspect": "16:9",
+  "mode": "pad",
+  "background": "#3B2A20"
+}'
+```
+
+`fit-aspect` reshapes; it does not paint new content into the margin. If you need the design's
+scene to actually extend into the new aspect, regenerate at the matching `size` (which consumes a
+generation), not `fit-aspect`.
