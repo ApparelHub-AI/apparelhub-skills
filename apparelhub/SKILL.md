@@ -226,6 +226,7 @@ reference up front saves you from shipping a broken product.
 | **Embroidered apparel** (Champion Anorak, polos, embroidered hats, jackets) | `references/embroidery.md` covers the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from Printful. |
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
 | Variant IDs, pricing, color limit, BC 3001 vs Comfort Colors trade-off | `references/garment-catalog.md` |
+| **Costs & margin pricing** — reading per-variant cost, setting prices to a target margin, pricing floors | `references/pricing.md`: per-variant `cost` lives on the **store-products list** (`GET /store/<store>/products` → `variants[].cost`), NOT on product-detail, and catalog cost can be `null` (esp. Printify); it's populated by the fulfillment sync; price each variant to `cost / (1 - margin)` |
 | Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
 | **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
@@ -313,6 +314,12 @@ GET https://api.apparelhub.ai/agents/v1/orders/<uuid>
 
 For order data interpretation (payment status, fulfillment status, who
 actually charged the card), see `references/orders-and-fulfillment.md`.
+
+The **store-products list** above carries each product's `variants` array,
+and each variant has both `price` (retail) and `cost` (provider production
+cost, populated after the fulfillment sync). That's the place to read cost
+for margin pricing — product-detail (`GET /product/<uuid>`) omits variants.
+See `references/pricing.md`.
 
 On an **Enterprise (agency) account**, every list/get above is scoped to one
 **active workspace** (the Default workspace unless you pass `?workspace=<uuid>`).

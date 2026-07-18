@@ -66,6 +66,16 @@ See `references/all-over-print.md` for the rules that apply across these product
 
 ---
 
+## Polo crest placement (left chest, NOT "front")
+
+A chest crest on a **polo** goes on the garment's dedicated **left-chest** placement — `left_chest` (Printify), `chest_left_dtf` (Printful DTG), or `embroidery_chest_left` (embroidery). Do **not** put a crest on the `front` placement: on a polo the `front` print area covers the whole torso (chest to hem), so a crest dropped there stretches into a giant torso print instead of a breast logo.
+
+- **Inset to ~90%.** The left-chest placement fills the design to the zone, which clips a shield/emblem's top and bottom at full size. Inset the crest to ~90% of the zone (centered) so the full shape stays clean — find the largest non-clipping size by shrinking a little at a time and checking the mockup.
+- **Provider notes.** Printful DTG polos are limited to a small chest area (Adidas); Printify's piqué polo has a proper `left_chest` zone; **Gelato polos currently render a blank mockup** (the preview can't composite a polo design), so don't prototype a polo crest on Gelato.
+- The platform's placement resolver (Garment Intelligence) encodes this, so `create_product` / `ship_product` / `prepare-print-data` route a polo crest to left-chest automatically. If you place print files by hand, pick the left-chest placement, not `front`.
+
+---
+
 ## Pricing floors (DO NOT price below)
 
 Negative margin = merchant loses money. These are the minimum retail prices that produce positive margin on the standard fee structure.
