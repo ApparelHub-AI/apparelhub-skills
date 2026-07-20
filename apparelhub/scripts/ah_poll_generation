@@ -10,9 +10,9 @@ instead of 200-with-image, to dodge the ~29s gateway timeout. The caller
 MUST then poll GET /agents/v1/images/upload/{image_uuid}/status until
 processing_status is `completed` (then read `url`) or `failed` (read
 `error`). Models currently async include Nano Banana (the platform
-default), Seedream 4.0/4.5, Flux 2 Pro, Google Imagen 4, Wan 2.7, and
-GPT Image 2. Fast models (OpenAI, Grok Imagine, Flux 1.1 Pro) still
-return 200-with-image directly and need no polling.
+default), OpenAI, Seedream 4.0/4.5, Flux 1.1 Pro, Flux 2 Pro, Google
+Imagen 4, Wan 2.7, and GPT Image 2. Only Grok Imagine still returns
+200-with-image directly and needs no polling.
 
 This script encodes the poll loop + transient HTTP retry semantics so
 callers don't hand-roll a multi-line bash loop. It is NOT a

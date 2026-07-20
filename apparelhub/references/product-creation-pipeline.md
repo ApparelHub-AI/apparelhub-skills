@@ -24,8 +24,8 @@ The extra phrasing on the background is deliberate. AI generators routinely igno
 
 **Two response shapes (branch on the HTTP status code):**
 
-- **Fast models** (`OpenAI`, `Grok Imagine`, `Flux 1.1 Pro`) return **200** with `{ "generated_image": { "uuid": "...", "url": "..." } }` directly. Save the UUID + url and continue.
-- **Slow models** (the **Nano Banana** default, plus `Seedream 4.0/4.5`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`) run through an async pipeline and return **202** with `{ "image_uuid": "...", "processing_status": "pending", "generated_image": { ...no url yet... } }`. This avoids the ~29s gateway timeout that used to 504 slow generations. You MUST then poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (then read `url`) or `failed` (then read `error`).
+- **The one fast model** (`Grok Imagine`) returns **200** with `{ "generated_image": { "uuid": "...", "url": "..." } }` directly. Save the UUID + url and continue.
+- **Slow models** (the **Nano Banana** default, plus `OpenAI`, `Seedream 4.0/4.5`, `Flux 1.1 Pro`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`) run through an async pipeline and return **202** with `{ "image_uuid": "...", "processing_status": "pending", "generated_image": { ...no url yet... } }`. This avoids the ~29s gateway timeout that used to 504 slow generations. You MUST then poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (then read `url`) or `failed` (then read `error`).
 
 Nano Banana is the platform default, so **most generations now take the 202 path.** Use the packaged `ah_poll_generation` script. DO NOT hand-roll a `for` loop with `$(...)` command substitution; the expansion check will prompt on every iteration.
 
