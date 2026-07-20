@@ -98,7 +98,7 @@ When in doubt, default to `Nano Banana` — it's the most consistent across cate
 
 `POST /agents/v1/images/generate` is overloaded. Same endpoint, same auth, but the **request shape** determines whether you're doing text-to-image OR img2img editing.
 
-**Async for slow models (202 + poll), applies to every mode below.** `generate` returns **200 with the image url** only for the one fast synchronous model (`Grok Imagine`), but **202 with an `image_uuid` and `processing_status: pending` (no url yet)** for every slow model (the **Nano Banana** default, plus `OpenAI`, `Seedream 4.0/4.5`, `Flux 1.1 Pro`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`): the backend routes those through an async pipeline to dodge the ~29s gateway timeout. On a 202, poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (read `url`) or `failed` (read `error`), or just run the packaged `ah_poll_generation <image_uuid>` helper. Nano Banana is the default, so most generations take the 202 path. Full poll contract: `product-creation-pipeline.md` Phase 1.
+**Async for slow models (202 + poll), applies to every mode below.** `generate` returns **200 with the image url** only for the one fast synchronous model (`Grok Imagine`), but **202 with an `image_uuid` and `processing_status: pending` (no url yet)** for every slow model (the **Nano Banana** default, plus `OpenAI`, `Seedream 4.0/4.5`, `Flux 1.1 Pro`, `Flux 2 Pro`, `Google Imagen 4`, `Wan 2.7`, `GPT Image 2`): the backend routes those through an async pipeline to dodge the ~29s gateway timeout. On a 202, poll `GET /agents/v1/images/upload/<image_uuid>/status` until `processing_status` is `completed` (read `url`) or `failed` (read `error`), or just run the packaged `ah_poll_generation <image_uuid>` helper. Nano Banana is the default, so most generations take the 202 path. **This applies to img2img EDITS too**: a slow-model edit also returns **202 + `image_uuid`** to poll (only `Grok Imagine` edits synchronously). Full poll contract: `product-creation-pipeline.md` Phase 1.
 
 ### Three modes
 
@@ -117,21 +117,22 @@ The same `source` and `size` parameters apply to all three modes. `additional_im
 - **`images=@...`** (multipart) — plural. The endpoint also accepts `image=@...` (singular) for backward compat with single-image uploads, but `images=@...` is the canonical form.
 - All UUIDs must be designs the user owns (filtered by `author_id`). Cross-user references fail with `Source image not found or access denied`.
 
-### Source compatibility — edit works on Nano Banana, OpenAI, and GPT Image 2
+### Source compatibility — img2img edit works on every source EXCEPT Imagen 4
 
-The OpenAI-backed sources (`OpenAI` = gpt-image, `GPT Image 2` = gpt-image-2) support img2img edit + multi-image. The Replicate-backed sources (Seedream 4.0, Seedream 4.5, Flux 1.1 Pro, Google Imagen 4, Grok Imagine, Wan 2.7) raise **422** on the edit path by design — the wrapper around their SDKs simply doesn't support img2img.
+Almost every model supports img2img edit now. The OpenAI-backed sources (`OpenAI` = gpt-image, `GPT Image 2` = gpt-image-2) and the Replicate models (Seedream, Flux, Grok, Wan) all do. Multi-reference (several source images in one edit) works on the array-input models: `Nano Banana`, `OpenAI`, `GPT Image 2`, `Seedream 4.0/4.5`, `Flux 2 Pro`, `Wan 2.7`. The single-image edit models (`Flux 1.1 Pro`, `Grok Imagine`) take exactly one reference. Only `Google Imagen 4` is text-to-image ONLY — an edit request on it returns a clean **400**, not a 500. **Slow-model edits are ASYNC (202 + poll), same as generation** — see §5b; only `Grok Imagine` edits synchronously.
 
 | Source | Text-to-image | Img2img edit | Multi-image |
 |---|---|---|---|
 | Nano Banana | ✅ | ✅ | ✅ (best at character consistency) |
 | OpenAI | ✅ | ✅ | ✅ |
 | GPT Image 2 | ✅ | ✅ | ✅ |
-| Seedream 4.0 | ✅ | ❌ 422 | ❌ |
-| Seedream 4.5 | ✅ | ❌ 422 | ❌ |
-| Flux 1.1 Pro | ✅ | ❌ 422 | ❌ |
-| Google Imagen 4 | ✅ | ❌ 422 | ❌ |
-| Grok Imagine | ✅ | ❌ 422 | ❌ |
-| Wan 2.7 | ✅ | ❌ 422 | ❌ |
+| Seedream 4.0 | ✅ | ✅ | ✅ (up to 10 refs) |
+| Seedream 4.5 | ✅ | ✅ | ✅ (up to 14 refs) |
+| Flux 1.1 Pro | ✅ | ✅ | ❌ (single reference) |
+| Flux 2 Pro | ✅ | ✅ | ✅ (up to 8 refs) |
+| Grok Imagine | ✅ | ✅ | ❌ (single reference) |
+| Wan 2.7 | ✅ | ✅ | ✅ (up to 9 refs) |
+| Google Imagen 4 | ✅ | ❌ 400 | ❌ (text-to-image only) |
 
 If the user wants edit and you'd normally reach for Seedream for the text accuracy, switch to **Nano Banana** for the edit step. Nano Banana is also the best at character/style consistency across a multi-image edit sequence — perfect when iterating on a series.
 
