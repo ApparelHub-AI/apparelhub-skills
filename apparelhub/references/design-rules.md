@@ -119,7 +119,7 @@ The same `source` and `size` parameters apply to all three modes. `additional_im
 
 ### Source compatibility — img2img edit works on every source EXCEPT Imagen 4
 
-Almost every model supports img2img edit now. The OpenAI-backed sources (`OpenAI` = gpt-image, `GPT Image 2` = gpt-image-2) and the Replicate models (Seedream, Flux, Grok, Wan) all do. Multi-reference (several source images in one edit) works on the array-input models: `Nano Banana`, `OpenAI`, `GPT Image 2`, `Seedream 4.0/4.5`, `Flux 2 Pro`, `Wan 2.7`. The single-image edit models (`Flux 1.1 Pro`, `Grok Imagine`) take exactly one reference. Only `Google Imagen 4` is text-to-image ONLY — an edit request on it returns a clean **400**, not a 500. **Slow-model edits are ASYNC (202 + poll), same as generation** — see §5b; only `Grok Imagine` edits synchronously.
+Most models support img2img edit now. The OpenAI-backed sources (`OpenAI` = gpt-image, `GPT Image 2` = gpt-image-2) and the Replicate models `Seedream 4.0/4.5`, `Flux 2 Pro`, `Grok Imagine`, `Wan 2.7` all do. Multi-reference (several source images in one edit) works on the array-input models: `Nano Banana`, `OpenAI`, `GPT Image 2`, `Seedream 4.0/4.5`, `Flux 2 Pro`, `Wan 2.7`. The single-image editor is `Grok Imagine` (plus the OpenAI-backed sources with one image). **Two sources do NOT edit:** `Google Imagen 4` (text-to-image only) and `Flux 1.1 Pro` (its img2img is Flux Redux — a composition/style *variation*, not an instruction-editor, so it is not offered for editing). An edit request on a non-editor returns a clean **400**, not a 500. **Slow-model edits are ASYNC (202 + poll), same as generation** — see §5b; only `Grok Imagine` edits synchronously.
 
 | Source | Text-to-image | Img2img edit | Multi-image |
 |---|---|---|---|
@@ -128,7 +128,7 @@ Almost every model supports img2img edit now. The OpenAI-backed sources (`OpenAI
 | GPT Image 2 | ✅ | ✅ | ✅ |
 | Seedream 4.0 | ✅ | ✅ | ✅ (up to 10 refs) |
 | Seedream 4.5 | ✅ | ✅ | ✅ (up to 14 refs) |
-| Flux 1.1 Pro | ✅ | ✅ | ❌ (single reference) |
+| Flux 1.1 Pro | ✅ | ❌ (Redux, not editing) | ❌ |
 | Flux 2 Pro | ✅ | ✅ | ✅ (up to 8 refs) |
 | Grok Imagine | ✅ | ✅ | ❌ (single reference) |
 | Wan 2.7 | ✅ | ✅ | ✅ (up to 9 refs) |
