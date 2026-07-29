@@ -228,6 +228,68 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>/fi
 
 ---
 
+## 5d. Retiring a design — archive, delete, and finding orphans
+
+**Designs CAN be archived and deleted.** If you conclude otherwise you have misread the surface, and an agent that concludes it will silently skip gallery cleanup. Both primitives live on the same `/images/generated/<uuid>` resource you already use.
+
+### Archive (reversible, the default choice)
+
+Archiving is a PATCH, not a dedicated endpoint. That's the part that's easy to miss.
+
+```bash
+# Archive
+curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"archived": true}'
+# Restore
+curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"archived": false}'
+```
+
+The PATCH accepts exactly two fields: **`title`** and **`archived`**. Anything else in the body is ignored and you get a `200` with nothing changed, which looks like success. Don't send `prompt` or `tags` and assume they took.
+
+Archiving hides the design from the default gallery listing and **never touches products already using it**. It is reversible. This is the right way to retire an unwanted or superseded design.
+
+### Delete (irreversible, guarded)
+
+```bash
+curl -sS -X DELETE "https://api.apparelhub.ai/agents/v1/images/generated/<uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+# -> 200 { "message": "Image deleted successfully", "freed_bytes": 1048576 }
+```
+
+Permanently removes the design and its stored files. If any **live (non-archived) product** uses the design, the platform refuses:
+
+```
+409 { "message": "This image is in use by one or more products and cannot be deleted...",
+      "code": "image_in_use",
+      "products": [ { "uuid": "...", "name": "..." } ] }
+```
+
+Nothing is deleted on a `409`. **Archive it instead**, or remove it from the listed products first. Never treat `image_in_use` as a hard failure to report and abandon; archiving is the answer almost every time.
+
+### Finding orphan designs
+
+There is a purpose-built filter for "designs nothing is using", so don't hand-roll it by cross-referencing products:
+
+```bash
+# Orphans: designs NOT used by any live product
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?on_products=false" -H "x-api-key: $APPARELHUB_API_KEY"
+# In use only
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?on_products=true" -H "x-api-key: $APPARELHUB_API_KEY"
+# Already-archived designs
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?archived=true" -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+The listing returns **active designs only** unless you pass `archived=true`, so an archived design "disappearing" from the default list is expected, not data loss. When `on_products` is set, each row also carries `usage_count`.
+
+Other supported filters on the same listing: `search`, `edited`, `source_uuid`, `size`, `sort` (`newest` | `oldest` | `most_used`), `limit` (max 500), `offset`.
+
+**The gallery-cleanup pass, end to end:** list with `on_products=false` → confirm with the user which orphans to retire → PATCH each with `archived: true`. Reach for DELETE only when the user explicitly wants the design erased permanently.
+
+---
+
 ## 6. Color discipline — max 4 colors per design
 
 More than 4 color variants per design creates SKU sprawl that hurts conversion. Pick the 4 best colors for the design and stop.
