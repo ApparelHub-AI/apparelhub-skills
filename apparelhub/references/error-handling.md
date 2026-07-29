@@ -54,6 +54,12 @@ Returned by `link-stripe-payment` when called on an order whose `ecommerce_exter
 
 A product with this exact name + provider already exists for this user. Either rename the new product or update the existing one instead of creating.
 
+### `image_in_use`
+
+From `DELETE /images/generated/{uuid}`. A live (non-archived) product still uses this design, so **nothing was deleted**. The body carries the blocking `products[]` (`uuid` + `name`).
+
+This is a guard, not a dead end. **Archive the design instead** (`PATCH /images/generated/{uuid}` with `{"archived": true}`), which is reversible and leaves those products untouched. Only if the user explicitly wants the design erased permanently should you archive or delete the blocking products first and retry. Do not report "designs cannot be deleted" and abandon the task. See `references/design-rules.md` section 5d.
+
 ---
 
 ## 2b. Workspace scoping errors (enterprise / agency accounts)

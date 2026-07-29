@@ -68,8 +68,10 @@ the prompt in context if the call is one you intended to make.
 | Method | Path | Purpose |
 |---|---|---|
 | `POST` | `/agents/v1/images/generate` | Generate a design image. Text-to-image OR img2img edit. |
-| `GET` | `/agents/v1/images/generated` | List previously generated images. Supports `?limit=N&sort=newest`. |
+| `GET` | `/agents/v1/images/generated` | List previously generated images. Active only unless `?archived=true`. Filters: `limit` (max 500), `sort` (`newest`/`oldest`/`most_used`), `search`, `edited`, `source_uuid`, `size`, `offset`, and **`on_products=false` to find orphan designs nothing is using**. |
 | `POST` | `/agents/v1/images/generated/{uuid}/transform` | Upload a processed (e.g. transparency-keyed) version. Multipart `image=@...` or `image` data URL. Returns a NEW image UUID. |
+| `PATCH` | `/agents/v1/images/generated/{uuid}` | Update a design. Accepts **only** `title` and `archived`. Send `{"archived": true}` to archive (reversible, safe) and `false` to restore. Other fields are ignored and still return `200`. |
+| `DELETE` | `/agents/v1/images/generated/{uuid}` | Permanently delete a design and its files. Irreversible. Returns `409 image_in_use` (with the blocking `products[]`) if a live product uses it; archive it instead. |
 
 **`POST /images/generate` request body**:
 
