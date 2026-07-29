@@ -8,6 +8,59 @@ curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/produc
 
 ---
 
+## Searching the catalog
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/products?category=hats" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+Filters: `category`, `keyword`, `page`, `per_page` (max 100), `fields`.
+
+**`category` is resolved against that provider's own taxonomy.** Providers use
+different vocabularies for the same idea, so the same word maps to a different
+ref on each one, and there is no shared category vocabulary to memorise. An
+unknown category returns **400 `category_not_found`** with `available_categories`
+in the body. Use that list, do not guess again.
+
+**`keyword` matches product name and brand across the whole catalog.** Reach for
+it when a category is too narrow, does not exist, or you are not sure what the
+provider calls the thing.
+
+### Read `warnings`. Always.
+
+An unfiltered call returns a bare array. Any **filtered** call returns
+`{garments, total, filters_applied, warnings}`. The item list alone cannot tell
+you that it is incomplete, and `warnings` is where that is said:
+
+```json
+{
+  "total": 1,
+  "filters_applied": { "category": "hats", "category_matched": "kids / Hats" },
+  "warnings": ["category='hats' matched the 'Hats' type inside 'kids' only, ..."]
+}
+```
+
+`category_matched: "kids / Hats"` means the term resolved to a type that lives
+inside ONE department, so the result is scoped to that department. One provider's
+only node named `Hats` sits under kids, and asking it for hats returns a single
+product. **That is not the catalog telling you hats are unavailable.** Try
+`keyword=hats` for a catalog-wide name search, and try the other providers
+before concluding a garment type cannot be sourced.
+
+The general rule: **a small or empty result set is a prompt to widen the search,
+never a conclusion that the product does not exist.** Widen in this order:
+`keyword` instead of `category` -> a different provider -> a broader term.
+
+### Not honoured
+
+`has_aop` is accepted for compatibility and **ignored** - the listing carries no
+all-over-print flag, and the response says so in `warnings`. To find all-over
+print goods, try `keyword=all-over` (some providers name them that way, others
+do not) or inspect a garment's print areas with the detail endpoint.
+
+---
+
 ## Bella+Canvas 3001 — Standard Unisex T-Shirt
 
 `product_ref_id = "71"` on Printful. The workhorse — most common tee body.
