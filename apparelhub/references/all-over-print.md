@@ -266,6 +266,34 @@ get the composed art, exterior structural panels get a matching solid, embroider
 placements are excluded. The mockup preview carries the same placement set, so the render PROVES
 the coverage — confirm no exterior face is blank before you ship.
 
+### Read `warnings` — and check the render, not the response fields
+
+Every structured field can read healthy while the pixels are wrong. A build that reported
+`print_style: fill`, all four placements covered, full-bleed geometry and an EMPTY `warnings`
+array still produced a patterned front with a blank back and blank sleeves, and those blank files
+went to the fulfillment provider. Only the render disagreed.
+
+So two habits:
+
+1. **Read `warnings` on every fill build.** The platform now checks the composed pixels and reports
+   a print file that came out a single flat colour, or one file being reused across placements with
+   different print areas. Those messages mean a face would be manufactured blank. Do not ship past
+   them.
+2. **Look at the mockup for BOTH faces.** Request the back render, not just the front, and check the
+   sleeves and the hem — not the chest, which is the one region that was correct while everything
+   else was empty. `placements_covered` listing a face only means a file was ATTACHED to it, never
+   that the file has artwork on it.
+
+### Do not pad a design you intend to print all over
+
+A design letterboxed to a target aspect (flat bars added top/bottom or left/right) prints those
+bars: they become an unpatterned band along the hem or the sleeve. Cover-fit cannot save you,
+because once the padded frame already matches the print area's aspect there is nothing left to
+crop. The platform now trims a uniform border before fitting and says so in `warnings`, but the
+better move is to generate the design at the print area's aspect in the first place (§12) and never
+pad it. If you used the aspect-fit step to reach that aspect, prefer the crop mode over pad for
+all-over goods.
+
 ---
 
 ## 12. Match the design's aspect ratio to the print area
