@@ -220,6 +220,37 @@ un-buildable, or a genuine unrecoverable error) should defer an item — and eve
 RETRY-NEXT-RUN, never permanently skip in a way that stalls the whole run. See "Scheduled /
 reconciler builds" in `product-creation-pipeline.md`.
 
+### `verify_design_quality` blocks on a green halo or a black box — these ARE hard blocks
+
+Symptom: a design fails QC with `Chroma-key green survives on N% of the visible design` or
+`A solid black rectangle covers N% of the visible design`.
+
+**Unlike the resolution warn above, treat both as genuine blocks.** The pipeline upscales a
+low-resolution design, so that warn is recoverable — but nothing downstream removes a halo or a
+slab. They print exactly as they look: a green outline around the artwork, or a filled black
+rectangle on the garment.
+
+**Fix**: re-run `process_transparency` for a halo; regenerate for a black box (and if it recurs,
+iterate with a prompt that names the artifact so the model removes it).
+
+These checks are new (MCP v0.5.16). Before that, `verify_design_quality` measured only alpha,
+resolution and premultiply — so it could and did return **100/100 on a design with both defects**.
+If you are running an older MCP build, a perfect score does not mean the design is visually clean;
+look at it.
+
+### `text_verified.has_text` is `null` — that means UNKNOWN, not "no text"
+
+`verify_design_text` reads text with local OCR (tesseract). When tesseract is not available it
+cannot look at all, so it returns `has_text: null`.
+
+**Do not treat `null` as falsy.** `false` means OCR ran and found no text; `null` means the question
+was never answered. If you skip the spelling check on a `null`, you can ship a design covered in
+misspelled text believing it had none — which is exactly what happened before MCP v0.5.16, when this
+case returned `false`.
+
+**Fix**: on `null`, read the design image yourself and verify any spelling visually, or install
+tesseract in the environment running the MCP server.
+
 ### "No variants could be resolved" on a garment with ONE dimension (clear phone cases etc.)
 
 Symptom: `ship_product` / `add_variants` fails with `bad_request: No variants could be resolved` even though your size names are correct.

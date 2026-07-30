@@ -284,7 +284,16 @@ curl -sS "https://api.apparelhub.ai/agents/v1/images/generated?archived=true" -H
 
 The listing returns **active designs only** unless you pass `archived=true`, so an archived design "disappearing" from the default list is expected, not data loss. When `on_products` is set, each row also carries `usage_count`.
 
-Other supported filters on the same listing: `search`, `edited`, `source_uuid`, `size`, `sort` (`newest` | `oldest` | `most_used`), `limit` (max 500), `offset`.
+Other supported filters on the same listing: `search`, `edited`, `source`, `source_uuid`, `size`, `sort` (`newest` | `oldest` | `most_used`), `limit` (max 500), `offset`.
+
+**Filtering by model:** pass `source` with the AI source NAME — the same form
+`POST /images/generate` takes, e.g. `?source=Nano Banana` (comma-separated for
+several, case-insensitive). You do not need to look up a UUID first; `source_uuid`
+still works if you have one. An unrecognised name returns **400** with the list of
+valid sources, so a result set that comes back is genuinely filtered. Before this
+was fixed the parameter was accepted and silently ignored, which meant a
+filtered-looking `200` could be the full unfiltered list — if you are running
+against an older platform build, verify rather than assume.
 
 **The gallery-cleanup pass, end to end:** list with `on_products=false` → confirm with the user which orphans to retire → PATCH each with `archived: true`. Reach for DELETE only when the user explicitly wants the design erased permanently.
 
