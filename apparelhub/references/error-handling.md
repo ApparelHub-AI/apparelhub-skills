@@ -78,11 +78,32 @@ Codes you may see on that path:
 
 ### `unsupported_format`
 
-The bytes are not PNG, JPEG or WEBP. If the file is **SVG or another vector
-format**, rasterize it to PNG at print size (2000px long side is a safe default
-for apparel, transparent background if the mark sits on the garment colour) and
-upload that. Rasterizing is not redrawing — it is the same artwork at a fixed
-resolution — so it does not breach a "do not alter our mark" instruction.
+The bytes are not SVG, PNG, JPEG or WEBP. **AI and EPS** need exporting first:
+save as SVG to keep it vector (rendered at print resolution, best quality) or
+export a PNG at print size. Exporting is not redrawing — it is the same artwork in
+another container — so it does not breach a "do not alter our mark" instruction.
+
+### `svg_text_not_outlined`
+
+The SVG contains live `<text>` rather than outlines. Rendering runs with no fonts
+on purpose, so that text would come out as nothing — a wordmark would upload blank,
+or a logo would upload with its mark intact and its wordmark quietly gone.
+
+Fix it at the source and re-upload: Illustrator *Type > Create Outlines*, Figma
+*Flatten*, Inkscape *Path > Object to Path*. **Do not retype or recreate the
+lettering yourself.** If you cannot get an outlined export, ask for a PNG.
+
+### `svg_external_reference`
+
+The SVG links to an image by URL. That is never fetched (deliberately — it is what
+stops a hostile SVG reaching anything), so it would render as a hole in the
+artwork. Re-export with the image embedded, or flatten the whole thing to PNG.
+Inline `data:` URIs are fine.
+
+### `svg_rendered_blank` / `svg_invalid` / `svg_too_large`
+
+The document drew nothing, could not be parsed, or is over the 8MB source ceiling.
+Flatten and re-export, or supply a PNG.
 
 ### `invalid_source_url`
 
