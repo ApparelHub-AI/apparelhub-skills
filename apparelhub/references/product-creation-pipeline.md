@@ -10,7 +10,18 @@ The workflow from "user wants a saguaro tee" to a finished, sellable product. Ex
 
 ---
 
-## Phase 1 — Generate the design image
+## Phase 1 — Get the design image
+
+There are two ways to arrive at a design uuid, and picking the wrong one is a
+real failure mode.
+
+- **The merchant already owns the artwork** (a logo, a brand mark, a cleared
+  cover, a photo they hold rights to) — do NOT generate. Upload the file and use
+  the uuid it returns: `references/byo-artwork.md`. Never redraw or approximate a
+  mark you were handed as a file.
+- **You are creating something new** — generate it, below.
+
+### Generating a new design
 
 ```bash
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" -d '{
