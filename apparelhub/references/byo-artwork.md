@@ -64,6 +64,10 @@ upload_design({ image_uuid: "…" })
 
 upload_design({ image_base64: "<base64>", filename: "seal.png" })
 → { status: "completed", design_uuid: "…" }
+
+upload_design({ source_url: "https://…/mark.svg" })
+→ { status: "completed", design_uuid: "…",
+    warnings: ["The SVG was rendered to a 4096x2048 raster at print resolution…"] }
 ```
 
 Then feed `design_uuid` to `ship_product` / `create_product` as normal.
@@ -110,24 +114,40 @@ moved the bytes.
 
 ## 2. Formats
 
-**Accepted: PNG, JPEG, WEBP.** PNG is the right default — it is the only one of
-the three that carries transparency, and a logo that will sit on a coloured
-garment needs a transparent background.
+**Accepted: SVG, PNG, JPEG, WEBP.**
 
-**Vector (SVG, AI, EPS) is not accepted.** Rasterize first:
+**Prefer SVG when the client has one.** Vector has no fixed resolution, so it is
+rendered server-side at print resolution (4096px on the long side) and stays crisp
+at any print size — better than any raster of the same mark, which can only be
+enlarged and lose edges. Upload the `.svg` directly; you get back an ordinary
+design uuid.
 
-- Render at the size you intend to print. 2000px on the long side is a safe
-  default for apparel; match the print area for all-over print.
-- Keep the background transparent if the mark should sit on the garment colour.
-- Export PNG.
+Two things have to be true of the SVG, and both are refused with instructions
+rather than silently mangled:
 
-Rasterizing is not redrawing — it is the same artwork at a fixed resolution, so
-it does not breach a "do not alter the mark" instruction. Generating a lookalike
-would.
+- **Text must be converted to outlines.** Rendering runs with no fonts on purpose,
+  because substituting a font in a brand wordmark is corruption, not a fallback.
+  Live `<text>` would render as nothing — so a wordmark would come out blank, or a
+  logo would come out with its mark intact and its wordmark quietly gone. Fix it at
+  the source: Illustrator *Type > Create Outlines*, Figma *Flatten*, Inkscape
+  *Path > Object to Path*. Never retype the lettering yourself.
+- **Linked images must be embedded.** An `<image href="https://…">` is never
+  fetched (that is deliberate — it is what stops a hostile SVG reaching anything),
+  so it would render as a hole. Re-export with the image embedded, or flatten the
+  whole thing to PNG. Inline `data:` URIs are fine.
 
-Ceiling is 50MB per file. Anything above the print maximum is scaled down on
-ingest; anything below the 512px minimum is enlarged — which is where the next
-section matters.
+**PNG is the right raster default** — the only common raster format that carries
+transparency, which a logo sitting on a coloured garment needs.
+
+**AI and EPS are not accepted.** Export to SVG (keeps it vector, best quality) or
+PNG at print size. Exporting is not redrawing — it is the same artwork in another
+container, so it does not breach a "do not alter the mark" instruction. Generating
+a lookalike would.
+
+Ceiling is 50MB per file (8MB for an SVG source). Anything above the print maximum
+is scaled down on ingest; anything below the 512px minimum is enlarged — which is
+where the next section matters. An SVG never needs enlarging: it is rendered at
+print size to begin with.
 
 ---
 
