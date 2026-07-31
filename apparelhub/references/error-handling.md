@@ -62,6 +62,51 @@ This is a guard, not a dead end. **Archive the design instead** (`PATCH /images/
 
 ---
 
+## 2a-bis. "I have a file and no way to use it" — uploading client artwork
+
+Not an error code, but the same class of dead end as the one above, and the more
+expensive one to get wrong.
+
+If you are handed a file the merchant already owns — a logo, a brand mark, a
+cleared cover — and you cannot find a way to put it on a product, **do not
+conclude it is impossible and do not generate a lookalike.** Uploading is
+supported: `references/byo-artwork.md`. Three routes (public `source_url`, a
+presigned URL you PUT to yourself, or inline base64), all of which return a uuid
+that works anywhere a generated design uuid works.
+
+Codes you may see on that path:
+
+### `unsupported_format`
+
+The bytes are not PNG, JPEG or WEBP. If the file is **SVG or another vector
+format**, rasterize it to PNG at print size (2000px long side is a safe default
+for apparel, transparent background if the mark sits on the garment colour) and
+upload that. Rasterizing is not redrawing — it is the same artwork at a fixed
+resolution — so it does not breach a "do not alter our mark" instruction.
+
+### `invalid_source_url`
+
+The URL is not https, does not resolve publicly, or resolves to a private
+address. The most common real cause is a **share link that requires sign-in** —
+the server fetches it anonymously, so it sees a login page, not the file. Either
+make the link publicly readable, or use the presigned route and upload the bytes
+yourself.
+
+### `file_too_large`
+
+Over 50MB outright, or over the much lower inline-base64 cap. Base64 is capped
+deliberately: it costs roughly 350k tokens per megabyte of file. Switch to
+`source_url` or the presigned route, both of which cost nothing in context.
+
+### `storage_limit_reached` (403)
+
+The account's storage allowance is full. This is a **storage** limit, not an AI
+generation limit — uploads never consume image generations. Archive or delete
+unused designs (`GET /images/generated?on_products=false` finds orphans), or the
+account needs a larger plan.
+
+---
+
 ## 2b. Workspace scoping errors (enterprise / agency accounts)
 
 On Enterprise accounts each request acts within an active workspace, and the `?workspace=<uuid>` selector is validated. Most accounts have one Default workspace and never see these.
