@@ -300,6 +300,35 @@ naming each placement that was left off and why:
 **This is a success, not a failure.** Log it and carry on. Worth surfacing to
 the merchant, because it explains why a panel came out blank.
 
+### `knit_options_unavailable` (400) — the garment is knitted, not printed
+
+A **knitted** garment has no ink. Every part of it, including your design, is
+reproduced in **yarn**, so the provider needs to know which yarns to use.
+
+Normally you never see this: yarn colours are matched to your design
+automatically and the preview **succeeds**, carrying a `warnings[]` note saying
+the garment is knitted and naming the yarns chosen. This error only appears when
+no usable colour can be read from the design (e.g. it is fully transparent, or
+has no solid areas).
+
+The body carries the provider's fixed yarn palette as `available_colors`
+(`[{hex, name}, ...]`) and the per-design colour cap as `max_colors`.
+
+**Recovery:** use a design with clear, solid areas of colour, or pick a printed
+garment instead. Do not retry the same design unchanged.
+
+**Design rule for knitted garments** — this is the part that bites:
+
+> A knit render **quantises your artwork to the yarn colours**, exactly the way
+> embroidery quantises to thread colours. Gradients, photographs and fine
+> detail do not survive. Keep the design to a few **flat, solid** colours with
+> strong contrast against the base, and stay within `max_colors` (the base
+> counts as one of them).
+
+A design with one dominant colour will come back as a **flat block** — the call
+succeeds and the mockup is real, but the artwork is gone. If a knit mockup looks
+like a solid rectangle, that is this, not a platform failure.
+
 ### `error_code` on a failed image generation
 
 `GET /agents/v1/images/upload/{uuid}/status` returns `error_code` alongside the
