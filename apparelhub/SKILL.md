@@ -225,7 +225,8 @@ reference up front saves you from shipping a broken product.
 | **Aspect ratio / matching the print area** (a design's shape doesn't fit the product — square design on a tall phone case / poster / wide banner) | `references/design-rules.md` section 5c: generate at the matching `size` (`1024x1024` square / `1024x1792` tall / `1792x1024` wide), or reshape an EXISTING design with `POST /images/generated/<uuid>/fit-aspect` (`pad` keeps everything / `crop` trims; **quota-free** — no image generation spent). Per-product mapping in `references/all-over-print.md` §12. |
 | **Retiring / cleaning up designs** (archive or delete a design, find orphan designs nothing is using, tidy a gallery) | `references/design-rules.md` section 5d. Designs CAN be archived and deleted — do not conclude otherwise. Archive is `PATCH /images/generated/<uuid>` with `{"archived": true}` (reversible, safe, the default choice); delete is `DELETE` on the same path and is refused with `409 image_in_use` while a live product uses it. Find orphans with `GET /images/generated?on_products=false`. |
 | Standard apparel (tees, hoodies, tanks, sweatshirts) | `references/product-creation-pipeline.md` |
-| **Embroidered apparel** (Champion Anorak, polos, embroidered hats, jackets) | `references/embroidery.md` covers the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from Printful. |
+| **Embroidered apparel** (Champion Anorak, polos, jackets — and headwear only once you have CONFIRMED that garment is embroidered) | `references/embroidery.md` covers the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from the provider. Do not assume headwear is embroidered: it spans both families, and assuming is what makes a printable cap invisible. |
+| **A garment can't take this design** (embroidery vs print, photoreal artwork refused, "no <item> is possible") | `references/provider-selection.md`. Capability limits are almost always scoped to ONE provider, not to the category. Enumerate providers with `find_garments` BEFORE reporting that something cannot be built. |
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
 | Variant IDs, pricing, color limit, BC 3001 vs Comfort Colors trade-off | `references/garment-catalog.md` |
 | **Costs & margin pricing** — reading per-variant cost, setting prices to a target margin, pricing floors | `references/pricing.md`: per-variant `cost` lives on the **store-products list** (`GET /store/<store>/products` → `variants[].cost`), NOT on product-detail, and catalog cost can be `null` (esp. Printify); it's populated by the fulfillment sync; price each variant to `cost / (1 - margin)` |
@@ -246,6 +247,7 @@ adapt:
 | An all-over-print pillow / doormat / luggage tag | `examples/all-over-pillow.md` |
 | An embroidered chest crest on a jacket / polo | `examples/embroidered-anorak.md` |
 | Reviewing + approving a held order as an agent (workflow config → poll the queue → approve/hold) | `examples/order-management.md` |
+| **A garment can't take the design** — the constraint is one provider's, not the category's; enumerate and build elsewhere | `examples/blocked-garment-find-alternative.md` |
 
 ---
 
@@ -289,11 +291,18 @@ without the user explicitly accepting the math.
 More than 4 color variants creates SKU sprawl that hurts conversion.
 Pick the 4 best colors for the design and stop.
 
-### 4e. Embroidery is stitched, not printed
+### 4e. Embroidery is stitched, not printed — on any provider
 
-For embroidered products, design colors must come from Printful's
-15-color thread palette. Designs with gradients, photorealism, or fine
-detail will NOT translate. See `references/embroidery.md`.
+Embroidery reproduces a design in thread, so gradients, photorealism
+and fine detail will NOT translate, and the colors must come from a
+fixed 15-color thread palette. That is a fact about embroidery, not
+about any one provider. See `references/embroidery.md`.
+
+**Before dropping an item for this reason, check whether a PRINTED
+version of the same garment exists.** Call `find_garments` with
+`accepts_photoreal: true` across all providers. Headwear especially
+spans both families: one provider may carry only embroidered caps while
+another carries DTF-printed caps that take a photograph as-is.
 
 ### 4f. Ask the user before syncing anywhere
 
@@ -301,6 +310,30 @@ Create the product, add variants, add to the store. STOP. Tell the
 user what's ready and ask whether to sync to fulfillment and/or to
 which sales channels. Sync is a state-changing operation that costs the
 merchant time to undo if you got it wrong.
+
+### 4g. Never state a capability limit you have only checked on one provider
+
+Say "this provider's hats are embroidery-only", not "hats are
+embroidery-only". The first is true and points somewhere; the second is
+a claim about the whole catalog that you have not tested, and a user who
+believes it stops asking.
+
+Before you tell a user something cannot be made:
+
+1. Call `find_garments` with the capability you need. It searches every
+   provider on the account by default.
+2. If it returns nothing, say what you searched — the response gives you
+   `providers_searched` — and that connecting another provider may change
+   the answer. "I did not find one on Printful, Printify or Gelato" is
+   honest. "It is not possible" is not.
+
+`accepts_photoreal: null` on a garment means **nobody could tell**, not
+that the garment cannot take the design. Treat it as "verify this", never
+as a reason to drop the item.
+
+This rail exists because an agent once found one provider's headwear was
+embroidery-only, reported that no hat was possible, and closed the item —
+while the same account had printed caps available the whole time.
 
 ---
 
