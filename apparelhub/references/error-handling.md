@@ -242,6 +242,115 @@ The preview create response AND the job poll response carry an additive
 
 ---
 
+## 2e. Preview and generation dead-ends that used to be unrecoverable
+
+Four failures that previously gave an agent nothing to act on. All four now
+return something you can branch on and retry from. **Read the code, not the
+prose** — the prose is for the human, the code is for you.
+
+### `empty_variant_selection` (400) — you sent `variant_ids: []`
+
+An empty array is an easy accident: it is what a filter or list comprehension
+produces when nothing matched (e.g. selecting "Black / M" on a garment where
+that combination is out of stock).
+
+It is **rejected**, not treated as "all variants". Previously the empty array
+fell through the filter, the garment's entire variant list survived (589 on
+Bella+Canvas 3001), got capped to 30, and fanned out to a 30-variant provider
+render that failed with a bare 500. That is expensive — Printful renders are
+rate-limited at roughly 2 per minute on a shared account — and it inverts what
+you actually asked for.
+
+**Recovery:** the response carries `available_colors`, `available_sizes` and a
+slimmed `available_variants[]`. Pick from those and retry. If your selection
+logic produced the empty list, that is the real bug — do not resend the same
+request.
+
+**Send 2 to 3 specific `variant_ids`.** Omitting the key entirely is legal but
+means "every variant", which is almost never what you want.
+
+### `placement_constraint` (400) — the provider refuses this placement set
+
+Providers cap how many print placements one submission may carry, and forbid
+certain placements appearing together. A fill / all-over design that covers
+every panel can exceed either limit.
+
+The platform now reduces the set for you where it can (see `warnings[]` below).
+This error means it could not. The body carries `requested_placements`,
+`attempted_placements` and, when the provider disclosed it, `max_placements`, so
+you can construct a valid request from the error alone.
+
+**Recovery:** retry with fewer placements, front first. Do not resend the same
+set; it will fail identically.
+
+### `warnings[]` on a successful preview — placements were dropped
+
+A preview that succeeded with a reduced placement set returns `warnings[]`
+naming each placement that was left off and why:
+
+```json
+{
+  "status": "pending",
+  "warnings": [
+    "Printful allows 3 placements on this garment and could not include sleeve_right in this preview, so it was left off."
+  ]
+}
+```
+
+**This is a success, not a failure.** Log it and carry on. Worth surfacing to
+the merchant, because it explains why a panel came out blank.
+
+### `knit_options_unavailable` (400) — the garment is knitted, not printed
+
+A **knitted** garment has no ink. Every part of it, including your design, is
+reproduced in **yarn**, so the provider needs to know which yarns to use.
+
+Normally you never see this: yarn colours are matched to your design
+automatically and the preview **succeeds**, carrying a `warnings[]` note saying
+the garment is knitted and naming the yarns chosen. This error only appears when
+no usable colour can be read from the design (e.g. it is fully transparent, or
+has no solid areas).
+
+The body carries the provider's fixed yarn palette as `available_colors`
+(`[{hex, name}, ...]`) and the per-design colour cap as `max_colors`.
+
+**Recovery:** use a design with clear, solid areas of colour, or pick a printed
+garment instead. Do not retry the same design unchanged.
+
+**Design rule for knitted garments** — this is the part that bites:
+
+> A knit render **quantises your artwork to the yarn colours**, exactly the way
+> embroidery quantises to thread colours. Gradients, photographs and fine
+> detail do not survive. Keep the design to a few **flat, solid** colours with
+> strong contrast against the base, and stay within `max_colors` (the base
+> counts as one of them).
+
+A design with one dominant colour will come back as a **flat block** — the call
+succeeds and the mockup is real, but the artwork is gone. If a knit mockup looks
+like a solid rectangle, that is this, not a platform failure.
+
+### `error_code` on a failed image generation
+
+`GET /agents/v1/images/upload/{uuid}/status` returns `error_code` alongside the
+human-readable `error` when `processing_status` is `failed`. Branch on the code;
+do not string-match the prose. The three codes mean **three different remedies**,
+and treating them alike wastes generations:
+
+| `error_code` | What happened | What to do |
+|---|---|---|
+| `content_blocked` | The model refused on content-policy grounds (copyrighted character, prohibited content). | **Revise the prompt.** An identical retry fails identically, so retrying is pure waste. |
+| `no_image_returned` | The model finished without producing an image, for a reason unrelated to policy. | **Retry once**, or switch model. Nothing is wrong with the prompt. |
+| `text_response_instead_of_image` | The model answered conversationally instead of drawing. Often an ask it cannot satisfy (3D, video, vector). | **Rephrase**, or switch model. |
+
+`error_code` is absent on failures recorded before this shipped, and on failure
+kinds with no specific code — treat a missing code as "unknown, retry once".
+
+⛔ **Do not tell a merchant their prompt may contain copyrighted content unless
+the code is `content_blocked`.** Sending someone off to fix a prompt that was
+never the problem is worse than saying nothing.
+
+---
+
 ## 3. Sync failures — the silent class
 
 The most common "I thought I synced this but customers don't see it" issues:
