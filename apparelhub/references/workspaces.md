@@ -87,13 +87,37 @@ platform is down:
 |---|---|---|---|
 | 404 | `workspace_not_found` | The `?workspace=` uuid doesn't resolve to any workspace | Fix the uuid, or omit the param to use Default. |
 | 403 | `workspace_forbidden` | The workspace exists but this key / user may not act in it | You're targeting a workspace you aren't assigned to (or a workspace-scoped key pointed at a different workspace — section 5). Use one you can access. |
+| 409 | `wrong_workspace` | The store is real and you may access it — you're scoped to a **different** workspace | Retry the identical call with the `workspace_uuid` the response hands you. |
 
 Example bodies:
 
 ```json
 404  {"error": "workspace_not_found", "message": "The requested workspace was not found."}
 403  {"error": "workspace_forbidden", "message": "This key does not have access to the requested workspace."}
+409  {"error": "wrong_workspace", "workspace_uuid": "<uuid>", "workspace_name": "Acme Co",
+      "retry_with": {"workspace": "<uuid>"}}
 ```
+
+### Omitting `?workspace=` is itself a failure mode, not a safe default
+
+The two errors above are about a *bad* uuid. The more common mistake is sending
+**no** `?workspace=` at all: that is not "act on whichever workspace the store
+is in", it silently means **Default**. On a multi-workspace account a store that
+lives anywhere else is then simply unreachable.
+
+This bites hardest on the store-scoped **setup** calls, because the store is
+resolved *before* any provider call is made:
+
+- `.../ecommerce_provider/<uuid>/connect-api-key` and `.../initiate` refuse the
+  store outright. Since the credential is never read, a correct one and a typo'd
+  one fail *identically* — which reads as a credential problem and sends you
+  after keys that were fine. `409 wrong_workspace` now names the real cause.
+- The readiness / connection-status polls answer for the **wrong** workspace, so
+  a connect that genuinely succeeded reports "not connected" for as long as you
+  are willing to poll.
+
+So on a multi-workspace account, send `?workspace=` on **every** store-scoped
+call — connect, initiate, and the polls — not just on lists.
 
 ## 3. Don't misread a scoped list as "missing data"
 
