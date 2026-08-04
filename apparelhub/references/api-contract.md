@@ -292,7 +292,31 @@ orders (`margin_coverage`). Full contract in `references/analytics.md`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/agents/v1/membership` | Current tier, features, usage quotas. |
+| `GET` | `/agents/v1/membership` | Current tier, features, usage quotas. Also `billing_provider` and a `billing` block (same shape as below). |
+| `GET` | `/agents/v1/membership/billing-route` | Where a payment action for this account must go. |
+
+**Some accounts cannot be upgraded through this API at all.** Merchants who
+installed from the Shopify App Store pay through Shopify's own hosted plan page,
+so plan selection is not an API call you can make on their behalf:
+
+```json
+{ "provider": "shopify",
+  "checkout_url": "https://admin.shopify.com/store/<shop>/charges/<app>/pricing_plans",
+  "shop_domain": "cool-shop.myshopify.com",
+  "reason": "billing_provider_shopify" }
+```
+
+- `provider: "stripe"` is the ordinary path. Nothing changes for you.
+- `provider: "shopify"` means: do **not** try to start, change, or pay for a
+  subscription. Give the merchant the `checkout_url` and let them complete it in
+  their Shopify admin.
+- `checkout_url` can be `null` even when the provider is Shopify. That still
+  means Shopify. Tell them to open their Shopify admin; never fall back to
+  suggesting a payment page on apparelhub.ai.
+
+`GET /agents/v1/pricing` returns `sellable_by` per tier (`["stripe"]`,
+`["shopify"]`, or both). A tier that does not list the merchant's provider
+cannot be bought by them, so do not offer it.
 
 ### OpenAPI spec
 

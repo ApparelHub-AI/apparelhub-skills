@@ -10,7 +10,7 @@ How to interpret API errors and the most common silent-failure modes.
 |---|---|---|
 | 401 | API key missing or invalid | Verify the user's `APPARELHUB_API_KEY` env var. Have them generate a new one at `https://apparelhub.ai/developer/api-keys` if it's expired. |
 | 402 | Account suspended — the owner's trial ended with no card on file; the account is read-only | `error=account_suspended`. The agent can't pay; tell the account OWNER to add a payment method at the `billing_url` in the body. Reads still work; only writes/quota/sync are blocked. Don't retry. See §2c. |
-| 403 | User's tier doesn't include API access OR endpoint is admin-only OR JWT auth attempted from non-browser | If `code=tier_missing_api_access`, link the user to `https://apparelhub.ai/pricing` (Professional / Enterprise required). If the user tried JWT auth from curl, switch to the Agent API + API key. |
+| 403 | User's tier doesn't include API access OR endpoint is admin-only OR JWT auth attempted from non-browser | If `code=tier_missing_api_access`, the user needs Professional or Enterprise. Read `GET /agents/v1/membership/billing-route` before naming a destination: Stripe accounts go to `https://apparelhub.ai/pricing`, Shopify-billed accounts upgrade in their Shopify admin (see api-contract.md). If the user tried JWT auth from curl, switch to the Agent API + API key. |
 | 404 | Endpoint path wrong OR resource doesn't exist | Verify the path against `https://api.apparelhub.ai/agents/v1/openapi.json`. If the resource UUID is wrong, list to confirm. |
 | 409 | Conflict — usually integration locked, sales channel uniqueness violation, or duplicate product | Read the error body. See "Common 409 codes" below. |
 | 422 | Validation error — field-level issue with the request body | Read the error body. Field name mismatches are the most common cause (Phase 3 vs Phase 5 names — see `references/product-creation-pipeline.md`). |
@@ -166,9 +166,18 @@ quota-consuming / channel-push call returns **HTTP 402**:
   "reason": "trial_expired",
   "tier": "Enterprise",
   "message": "This account's Enterprise trial has ended. The account owner must add a payment method in Billing to continue.",
+  "billing_provider": "stripe",
   "billing_url": "https://apparelhub.ai/billing/subscription"
 }
 ```
+
+**Read `billing_provider` before you tell anyone what to do.** On a
+`"shopify"` account the fix is in their Shopify admin, not on apparelhub.ai, and
+`billing_url` points there instead (or is `null` if we could not resolve their
+plan page, in which case say "your Shopify admin" and stop). Telling a Shopify
+merchant to add a card in Billing sends them somewhere they can do nothing.
+Quote the `message` and `billing_url` from the response rather than composing
+your own, and it stays correct on both.
 
 **Reads still work.** GET calls succeed — you can list/inspect stores, products,
 designs, and orders. Only mutations are gated.
