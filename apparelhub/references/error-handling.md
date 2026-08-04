@@ -136,13 +136,31 @@ On Enterprise accounts each request acts within an active workspace, and the `?w
 
 The `?workspace=` uuid doesn't resolve to any workspace.
 
-**Fix**: correct the uuid, or omit the param (calls default to the account's Default workspace). There's no agent endpoint that lists workspaces — get the uuid from an asset's `workspaces` field or the web UI (Account → Team & Workspaces).
+**Fix**: correct the uuid, or omit the param (calls default to the account's Default workspace). List them with `GET /agents/v1/workspaces` — see `references/workspaces.md` §2.
 
 ### `workspace_forbidden` (403)
 
 The workspace exists but this key/user may not act in it. Either the user isn't assigned to it, or a **workspace-scoped key** was pointed at a workspace outside the one(s) it's scoped to.
 
 **Fix**: target a workspace the caller can access. Don't retry with the same `?workspace=`.
+
+### `wrong_workspace` (409) — the store is real and yours, you're just scoped elsewhere
+
+The store exists and you may access it, but the request was scoped to a **different** workspace, so it was refused before anything else ran. You get this from the connect calls (`.../connect-api-key`, `.../initiate`) when the store lives outside the account's Default workspace and no `?workspace=` was sent.
+
+Worth recognising on sight, because this used to surface as `Store not found or access denied.` — wrong on both counts, and it reads as a credential problem. **The store is resolved BEFORE any provider call**, so a correct credential and a typo'd one fail *identically*, and the same credential works in the web dashboard (which always scopes to the workspace being viewed). That has cost real debugging time re-checking keys that were never read.
+
+The response names its own fix:
+
+```json
+{"error":"wrong_workspace",
+ "workspace_uuid":"<uuid>","workspace_name":"Acme Co",
+ "retry_with":{"workspace":"<uuid>"}}
+```
+
+**Fix**: retry the identical call with `?workspace=<workspace_uuid>`. Do not touch the credentials.
+
+**Prevention**: on a multi-workspace account, send `?workspace=` on every store-scoped call — connect, initiate, and the readiness/status polls too. A poll scoped to the wrong workspace reports "not connected" forever, so a connection that really did land never reaches the user.
 
 ### `forbidden` with a `capability` field (403)
 
