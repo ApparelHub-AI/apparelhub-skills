@@ -532,6 +532,8 @@ curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/product/<product_uuid>" \
 
 Category placement is resolved automatically from the product/garment name (a "tee" lands under apparel T-shirts, not golf accessories). If a product needs a specific TikTok category, that's a per-product override on the product's metadata — ask the merchant for the desired category rather than guessing.
 
+**Size charts are automatic for apparel.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image) — you don't need to build or attach one. It's best-effort: if the provider has no measurements for that garment, the chart is simply omitted (the listing still syncs). Nothing for you to do here.
+
 ---
 
 ## Scheduled / reconciler builds (automated, unattended runs)
