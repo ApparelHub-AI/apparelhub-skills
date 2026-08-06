@@ -534,6 +534,8 @@ Category placement is resolved automatically from the product/garment name (a "t
 
 **Size charts are automatic for apparel.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image) — you don't need to build or attach one. It's best-effort: if the provider has no measurements for that garment, the chart is simply omitted (the listing still syncs). Nothing for you to do here.
 
+**Compliance attestations (e.g. CA Prop 65) are the MERCHANT's, not yours.** TikTok apparel listings may ask for legal attestations (CA Prop 65: Repro. Chems / Carcinogens, Dangerous Goods, Organic Textile). **Never invent, guess, or set these on the merchant's behalf** — they are legal statements. They are configured ONCE by the merchant at the TikTok integration level and then apply to every synced listing automatically. If a listing is flagged for missing compliance, tell the merchant they need to set their TikTok compliance answers on the integration; do not answer for them.
+
 ---
 
 ## Scheduled / reconciler builds (automated, unattended runs)
