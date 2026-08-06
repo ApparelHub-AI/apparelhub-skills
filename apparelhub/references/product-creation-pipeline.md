@@ -528,6 +528,8 @@ curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/product/<product_uuid>" \
 - **`key_product_features`** — the product-page "highlights". Max 5 / 1500 chars total.
 - **`brand_id`** — a TikTok brand id; omit for no brand.
 - **`attributes`** — optional `{name: value}` product attributes (e.g. `{"Material": "Cotton"}`).
+- **`weight`** / **`dimensions`** — package weight + dimensions for shipping, e.g. `{"value": 0.9, "unit": "POUND"}` and `{"length": 12, "width": 9, "height": 3, "unit": "INCH"}`. If unset, a sane apparel-mailer default is used; a bulky item (hoodie) should set an accurate weight.
+- **`shipping_template_id`** — usually set once by the merchant at the integration level, not per product. Binds a TikTok shipping template so the listing uses that rate instead of the shop's default. If a listing is showing unexpected shipping (e.g. free), that's a shop-level shipping setting or the bound template — the merchant configures it.
 - Merge semantics: only the keys you send change; send a key as `null` to clear it. All fields are optional — omit them and the listing syncs as before.
 
 Category placement is resolved automatically from the product/garment name (a "tee" lands under apparel T-shirts, not golf accessories). If a product needs a specific TikTok category, that's a per-product override on the product's metadata — ask the merchant for the desired category rather than guessing.
