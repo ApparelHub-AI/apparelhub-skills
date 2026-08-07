@@ -510,6 +510,34 @@ For channels that support a draft state (Etsy, Shopify), prefer pushing as a dra
 
 Only push as `active` if the user EXPLICITLY says "make it live" or "publish it." The cost of a too-eager publish (typo'd description in front of real customers) is much higher than the cost of one extra step.
 
+### TikTok Shop listing metadata (optional — improves discoverability)
+
+TikTok Shop listings are stronger with SEO search terms, product highlights, and a category-appropriate placement. You can enrich a product's TikTok listing BEFORE (or after) syncing it to a TikTok channel by setting `tiktok_listing` on `update_product` (MCP tool `update_product`, field `changes.tiktok_listing`; or `PATCH /agents/v1/product/<uuid>` with a `tiktok_listing` object). It's stored on the product and applied whenever it syncs to a TikTok channel; other channels ignore it.
+
+```bash
+curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/product/<product_uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "content-type: application/json" \
+  -d '{"tiktok_listing": {
+        "search_terms": ["graphic tee", "unisex cotton tee", "funny shirt"],
+        "key_product_features": ["Soft ringspun cotton", "Relaxed unisex fit"],
+        "brand_id": "<tiktok_brand_id>"
+      }}'
+```
+
+- **`search_terms`** — SEO words (hidden from buyers, boost search). Max 15 / 250 chars total; excess is trimmed server-side.
+- **`key_product_features`** — the product-page "highlights". Max 5 / 1500 chars total.
+- **`brand_id`** — a TikTok brand id; omit for no brand.
+- **`attributes`** — optional `{name: value}` product attributes (e.g. `{"Material": "Cotton"}`).
+- **`weight`** / **`dimensions`** — package weight + dimensions for shipping, e.g. `{"value": 0.9, "unit": "POUND"}` and `{"length": 12, "width": 9, "height": 3, "unit": "INCH"}`. If unset, a sane apparel-mailer default is used; a bulky item (hoodie) should set an accurate weight.
+- **`shipping_template_id`** — usually set once by the merchant at the integration level, not per product. Binds a TikTok shipping template so the listing uses that rate instead of the shop's default. If a listing is showing unexpected shipping (e.g. free), that's a shop-level shipping setting or the bound template — the merchant configures it.
+- Merge semantics: only the keys you send change; send a key as `null` to clear it. All fields are optional — omit them and the listing syncs as before.
+
+Category placement is resolved automatically from the product/garment name (a "tee" lands under apparel T-shirts, not golf accessories). If a product needs a specific TikTok category, that's a per-product override on the product's metadata — ask the merchant for the desired category rather than guessing.
+
+**Size charts are automatic for apparel.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image) — you don't need to build or attach one. It's best-effort: if the provider has no measurements for that garment, the chart is simply omitted (the listing still syncs). Nothing for you to do here.
+
+**Compliance attestations (e.g. CA Prop 65) are the MERCHANT's, not yours.** TikTok apparel listings may ask for legal attestations (CA Prop 65: Repro. Chems / Carcinogens, Dangerous Goods, Organic Textile). **Never invent, guess, or set these on the merchant's behalf** — they are legal statements. They are configured ONCE by the merchant at the TikTok integration level and then apply to every synced listing automatically. If a listing is flagged for missing compliance, tell the merchant they need to set their TikTok compliance answers on the integration; do not answer for them.
+
 ---
 
 ## Scheduled / reconciler builds (automated, unattended runs)
