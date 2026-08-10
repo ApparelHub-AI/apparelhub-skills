@@ -530,6 +530,7 @@ curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/product/<product_uuid>" \
 - **`attributes`** — optional `{name: value}` product attributes (e.g. `{"Material": "Cotton"}`).
 - **`weight`** / **`dimensions`** — package weight + dimensions for shipping, e.g. `{"value": 0.9, "unit": "POUND"}` and `{"length": 12, "width": 9, "height": 3, "unit": "INCH"}`. If unset, a sane apparel-mailer default is used; a bulky item (hoodie) should set an accurate weight.
 - **`shipping_template_id`** — usually set once by the merchant at the integration level, not per product. Binds a TikTok shipping template so the listing uses that rate instead of the shop's default. If a listing is showing unexpected shipping (e.g. free), that's a shop-level shipping setting or the bound template — the merchant configures it.
+- **`title`** / **`description`** — TikTok-ONLY overrides. Unset (the normal case) means the listing uses the product's own name and description. Set them only when you want copy that differs on TikTok, typically to apply TikTok's own optimized title (see the next section). **This is why the override exists:** the product record is shared by every channel, so writing a TikTok-tuned title onto the product itself would silently rewrite the same merchant's Shopify, WooCommerce and Wix listings.
 - Merge semantics: only the keys you send change; send a key as `null` to clear it. All fields are optional — omit them and the listing syncs as before.
 
 Category placement is resolved automatically from the product/garment name (a "tee" lands under apparel T-shirts, not golf accessories). If a product needs a specific TikTok category, that's a per-product override on the product's metadata — ask the merchant for the desired category rather than guessing.
@@ -537,6 +538,42 @@ Category placement is resolved automatically from the product/garment name (a "t
 **Size charts are automatic for apparel.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image) — you don't need to build or attach one. It's best-effort: if the provider has no measurements for that garment, the chart is simply omitted (the listing still syncs). Nothing for you to do here.
 
 **Compliance attestations (e.g. CA Prop 65) are the MERCHANT's, not yours.** TikTok apparel listings may ask for legal attestations (CA Prop 65: Repro. Chems / Carcinogens, Dangerous Goods, Organic Textile). **Never invent, guess, or set these on the merchant's behalf** — they are legal statements. They are configured ONCE by the merchant at the TikTok integration level and then apply to every synced listing automatically. If a listing is flagged for missing compliance, tell the merchant they need to set their TikTok compliance answers on the integration; do not answer for them.
+
+### TikTok listing quality — diagnose, fix, verify
+
+TikTok grades every listing **POOR / FAIR / GOOD**, and a low grade suppresses how often the listing is shown. It also tells you exactly why, and what it would rather see. Use that instead of guessing.
+
+**Diagnose (read-only).** MCP tool `diagnose_tiktok_listings`, or `GET /agents/v1/store/<store_uuid>/tiktok/listing-quality`:
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/tiktok/listing-quality" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+```
+
+Each listing comes back with:
+
+- **`tier`** — the current grade, and **`remaining_recommendations`**, how many fixes are still outstanding.
+- **`issues[]`** — one per problem: `field` (TITLE / DESCRIPTION / IMAGE / ATTRIBUTE / SIZE_CHART), a machine-readable `code` (e.g. `TITLE_LESS_THAN_40_CHARACTERS`), `how_to_solve` in plain language, and `reaches_tier` — the tier that **this one fix** unlocks, not the current grade.
+- **`recommended`** — TikTok's own suggested `search_terms`, `titles`, `descriptions`. Prefer these over anything you invent: they come from the same system doing the grading.
+
+**Fix.** Either write the values yourself with `update_product` → `tiktok_listing` (`search_terms`, `title`, `description`) and re-sync, or let the platform apply TikTok's recommendations for you:
+
+```bash
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/tiktok/listing-quality/optimize" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "content-type: application/json" \
+  -d '{"fields": ["search_terms"], "dry_run": true}'
+```
+
+- `fields` defaults to `["search_terms"]`. Search terms are hidden listing metadata, so applying them is low-risk.
+- **Naming `title` or `description` replaces merchant-visible copy with machine-generated text. Ask the user before you do that** — it is their brand voice, not a technical field. `dry_run: true` shows exactly what would change first.
+- Applied title/description land on the TikTok-only override, so the merchant's other sales channels are untouched.
+
+**Verify — but not immediately.** TikTok re-grades a listing asynchronously. A tier read straight after an edit is still the OLD grade, so re-run the diagnosis **later** rather than reporting the unchanged number as a result. The optimize call deliberately does not return a new tier for this reason.
+
+**Two limits worth knowing before you report a result:**
+
+- **Only LIVE listings can be diagnosed.** A draft or in-review listing comes back `diagnosable: false` with the reason. That is not a failure to fix — it just is not gradeable yet.
+- **`unavailable` means TikTok would not serve part of the answer**, most often because the app has not been granted TikTok's product-optimization scope. Search-term recommendations usually still work in that case, so a partial answer is normal. Say which part is missing rather than presenting a thin result as the whole picture.
 
 ---
 
