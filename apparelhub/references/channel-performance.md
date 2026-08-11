@@ -27,7 +27,7 @@ rest of analytics — a lower tier gets `403 feature_unavailable`, and you shoul
 say so rather than retry.
 
 Params: `start` / `end` (YYYY-MM-DD, default the last 28 days ending yesterday),
-`state` (listings only), `workspace`.
+`state` (listings only), `provider`, `store`, `workspace`.
 
 If you have MCP tools available, prefer `channel_performance`,
 `channel_opportunities` and `channel_coverage` over raw HTTP.
@@ -63,6 +63,29 @@ shop as having no traffic.
 
 **If you take one rule from this file:** never conclude "no demand" from a
 missing number. Say "this channel does not report views" instead.
+
+---
+
+## 2b. ⛔ Always read a row WITH its channel
+
+Every row carries `provider` (and `store_name` / `store_uuid`). Read it.
+
+A channel product id is **only unique within its own channel**, so two rows can
+carry the same `channel_product_ref` and be completely unrelated listings on
+different channels. Comparing two rows, ranking them, or acting on one without
+knowing which channel it belongs to is a conclusion you have no basis for.
+
+`channels_present` lists the channels that actually have data in the range —
+those are the meaningful values for the `provider` filter. Use it rather than
+guessing a channel name or offering one that returns nothing:
+
+```bash
+# just TikTok, just this store
+GET /agents/v1/analytics/channel/listings?provider=TikTok%20Shop&store=<store_uuid>
+```
+
+Filtering narrows the summary counts too, so `summary` and `listings` always
+agree with each other.
 
 ---
 
