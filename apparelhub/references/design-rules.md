@@ -75,6 +75,8 @@ Provider ranking for text accuracy:
 
 If multiple regenerations fail to produce correct text, switch sources before increasing prompt verbosity. Some models just can't do text reliably.
 
+> **The same instinct applies when a model REFUSES a prompt on content grounds** (`error_code: content_blocked`): change the model, not the wording. Content guards are provider-specific, so a prompt one provider refuses another routinely renders. Reword at most twice, then cycle models; only `content_blocked_all_models` means it is genuinely time to give up on that design. Full protocol: `error-handling.md` §2e.6.
+
 ---
 
 ## 5. AI source selection — which model for which job

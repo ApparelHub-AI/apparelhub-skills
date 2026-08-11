@@ -365,7 +365,8 @@ and treating them alike wastes generations:
 
 | `error_code` | What happened | What to do |
 |---|---|---|
-| `content_blocked` | The model refused on content-policy grounds (copyrighted character, prohibited content). | **Revise the prompt.** An identical retry fails identically, so retrying is pure waste. |
+| `content_blocked` | **One** model refused on content-policy grounds (copyrighted character, prohibited content). | **Do not abandon the design, and do not just reword.** The identical prompt fails identically on that model, but a DIFFERENT model very often renders it. Full protocol in §2e.6. |
+| `content_blocked_all_models` | **Every** model refused. The full sweep is exhausted. | This is the only legitimate signal to give up on that design. See §2e.6 step 4. |
 | `no_image_returned` | The model finished without producing an image, for a reason unrelated to policy. | **Retry once**, or switch model. Nothing is wrong with the prompt. |
 | `text_response_instead_of_image` | The model answered conversationally instead of drawing. Often an ask it cannot satisfy (3D, video, vector). | **Rephrase**, or switch model. |
 
@@ -375,6 +376,67 @@ kinds with no specific code — treat a missing code as "unknown, retry once".
 ⛔ **Do not tell a merchant their prompt may contain copyrighted content unless
 the code is `content_blocked`.** Sending someone off to fix a prompt that was
 never the problem is worse than saying nothing.
+
+### 2e.6 Content blocks: reword twice, then cycle every model, then abandon
+
+**On a content block, changing the MODEL beats changing the WORDS.** That inverts
+the natural instinct, which is why it is written down here.
+
+**What a content block actually is.** A provider refusing to emit an image it
+judges to reproduce protected material, or to breach its own usage policy. It is
+a normal, expected outcome for some subject matter, not a platform fault and not
+a sign anything is broken. Nothing needs escalating.
+
+**Why rewording is the weak lever.** These guards react to *subject matter* far
+more than to phrasing. If the guard objects to the motif, ten rewordings of the
+same idea are ten refusals. That is not hypothetical: in one real session an
+agent hit a block, reworded the same prompt six times, was refused every time,
+and abandoned the design — while other models sat untried.
+
+**Why changing model is the strong lever.** Content guards are
+**provider-specific**. They are not a shared standard, and providers differ in
+both the *kind* of guard they run and how trigger-happy it is. Some run a
+recitation/copyright guard; others only screen for unsafe content. So a prompt
+one provider refuses on copyright grounds is routinely rendered by another with
+no objection at all.
+
+#### The protocol
+
+1. **Recognise the condition.** Branch on `error_code` — never on the message
+   prose. A content block is not a validation error, not a rate limit, and not a
+   transient failure, and none of those remedies apply to it.
+
+2. **Reword at most twice.** Vary the **motif and palette away from the
+   recognisable signature** — that is the thing a guard is reacting to. Do not
+   simply rephrase the same sentence with different adjectives; that is the
+   six-attempt failure above. Two attempts, then stop; further rewording of the
+   same idea has no expected value.
+
+3. **Then let the model sweep run.** The server cycles the remaining models for
+   you on a content block, jumping to a different provider first. **This is the
+   step agents miss, and it is the one most likely to actually produce the
+   design.** It costs little: a refusal comes back *faster* than a success,
+   because the model never generates anything. If you are calling the API
+   directly rather than through the MCP server, do this yourself — retry the same
+   prompt against a different `source`, preferring a different provider over a
+   sibling model on the same one.
+
+4. **Only abandon when the sweep is exhausted.** `content_blocked_all_models`
+   means every model refused, and it is the **only** legitimate signal to give up
+   on that design. ⛔ **A single `content_blocked` is never sufficient grounds to
+   abandon.** If you do abandon at that point, say plainly that every model
+   refused and what the subject was — do not report it as a generic failure, and
+   do not tell the merchant to keep rewording.
+
+#### One thing to do with a rescued design
+
+If a design only rendered *after* a content block was routed around, that is
+worth a deliberate look before it goes onto a product — it is, by definition, art
+that at least one provider's guard objected to. The result's `fallback_trail`
+records the block, so you can tell. Where a compliance-checking capability is
+available to you (the MCP server exposes `check_design_compliance`), this is
+exactly the design to run it on. This is cheap and it keeps the merchant, whose
+name is on the product, out of an argument they did not choose.
 
 ---
 
