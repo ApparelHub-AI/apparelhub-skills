@@ -570,6 +570,30 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/tiktok/
 
 **Verify — but not immediately.** TikTok re-grades a listing asynchronously. A tier read straight after an edit is still the OLD grade, so re-run the diagnosis **later** rather than reporting the unchanged number as a result. The optimize call deliberately does not return a new tier for this reason.
 
+### When TikTok flags a problem but suggests nothing
+
+This is the common case, not the exception. On a real catalog TikTok flagged 27 titles as too short and offered **zero** replacement titles, so `apply: ["title"]` came back `no_recommendation` for every listing.
+
+That is not a dead end. Each diagnosed listing also carries everything needed to write the fix yourself:
+
+- **`requirements`** — the computed target, e.g. `{min_length: 40, max_length: 150, current_length: 21}`. Write to this. TikTok's own length rules contradict each other (40–150 vs 20–200 vs ≥25 can all be live at once), and this is the intersection — the only window that satisfies all of them. Do not re-derive it from the individual codes.
+- **`building_blocks`** — the product's real garment, colors, sizes, attributes and description. Write from these. Do not invent material, fit or care claims the merchant never made.
+- **`candidates.title`** — ready-to-use options, shortest first, each already validated against `requirements`. Offer these to the user rather than applying one silently; a title is their brand voice.
+
+Apply a chosen or self-written title with `update_product` → `tiktok_listing.title` (TikTok-only, so the merchant's other channels keep their wording), then re-sync.
+
+**Check `issues[].fixable_by` before you act.** It tells you whether the problem is yours:
+
+| `fixable_by` | Meaning |
+|---|---|
+| `agent` | You can author the fix. |
+| `platform` | ApparelHub derives it (size charts, washing instructions) — nothing for you to do. |
+| `merchant` | Needs a human decision, typically legal. Never answer on their behalf. |
+| `photography` | Needs new imagery, not better writing. **Report it; do not try to write around it.** |
+| `unknown` | A code not yet classified — read `how_to_solve` and use your judgement. |
+
+**One honesty caveat.** A candidate may carry a `caveat` saying it names the product but TikTok might still disagree. That is real: TikTok has flagged `TITLE_NOT_INCLUDE_PRODUCT_SUBJECT_WORDS` on a listing literally titled "…I Approved It T-Shirt". Its check is stricter than "contains the word" and is not reproducible from the published rule, so length is guaranteed and the subject-word rule is not. Pass that uncertainty on rather than promising the listing is fixed.
+
 **Two limits worth knowing before you report a result:**
 
 - **Only LIVE listings can be diagnosed.** A draft or in-review listing comes back `diagnosable: false` with the reason. That is not a failure to fix — it just is not gradeable yet.
