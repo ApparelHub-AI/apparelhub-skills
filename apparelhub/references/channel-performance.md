@@ -208,3 +208,90 @@ not created through the platform — usually a merchant's pre-existing catalogue
 Those rows are still real signal about the shop and are deliberately kept rather
 than hidden. You just cannot act on them through the product endpoints until the
 listing is adopted, so do not try to edit them.
+
+---
+
+## 7. Only orderable listings by default
+
+The grid shows listings a shopper could **actually buy**: the product is active,
+synced to a fulfillment provider, and synced to the sales channel.
+
+A deactivated or fulfillment-unmapped product still carries a channel record, so
+it used to appear alongside everything else — carrying a state and a
+recommendation that nobody could act on, because the product cannot be ordered at
+all. On a real shop that was 17 of 38 rows sitting above the ones that mattered.
+
+`hidden_unorderable` says how many are being held back. Pass
+`include_unorderable=true` to see them, and tell the merchant that is what you
+did — otherwise a row that "reappeared" looks like a bug.
+
+Channel-native listings we do not manage stay visible either way. We cannot
+verify whether they are orderable, and excluding them on that basis would hide a
+real listing on the strength of our own ignorance.
+
+---
+
+## 8. Did the last fix work? — `GET /agents/v1/analytics/interventions`
+
+Everything above tells you what to change. This tells you whether changing it
+helped.
+
+Every shopper-visible edit is recorded automatically as it is made — title,
+description, images, price, search terms, variants, availability — along with the
+signal state that prompted it. Once the channel has finalised enough days either
+side, a verdict is computed on the ONE metric that change should have moved.
+
+| Verdict | Meaning |
+|---|---|
+| `pending` | Too recent. The window has not closed yet |
+| `improved` / `worsened` | The targeted metric moved materially, in that direction |
+| `no_change` | It moved less than 15%, which we call flat |
+| `unmeasurable` | **We cannot tell.** Read `verdict_reason` |
+| `confounded` | Another edit landed close enough that neither owns the result |
+
+### ⛔ `unmeasurable` does NOT mean "it had no effect"
+
+It is the **default** outcome, not an error, and on a low-traffic shop it will be
+most of them. Saying "your change did nothing" when the truth is "nobody saw the
+listing either way" is the same mistake as §3, one step later in the process.
+
+`verdict_reason` tells you which:
+
+| Reason | What to say |
+|---|---|
+| `no_shop_traffic` | The shop is not getting enough views for any single edit to register. Distribution, not editing |
+| `window_not_final` | The channel has not settled those days yet. Wait |
+| `metric_not_reported` | This channel does not report the metric that change is judged on |
+| `no_baseline` | The listing did not exist long enough before the edit to compare against |
+
+### Which metric a change is judged on
+
+Set when the change is recorded, so a later change of policy cannot silently
+re-interpret old verdicts.
+
+| Change | Judged on | Why |
+|---|---|---|
+| title, images | click-through | The card cannot make someone buy, only click |
+| description, variants | conversion | The product page is where buying is decided |
+| price | units sold | |
+| search terms, availability | impressions | These change what you are shown FOR, or whether at all |
+
+### Using it
+
+```bash
+# Did anything we changed recently work?
+GET /agents/v1/analytics/interventions
+
+#   -> summary.measurable: how many could be judged AT ALL. Quote this
+#      alongside any count of improvements. "3 improved of 4 judged" and
+#      "3 improved of 40 recorded, 36 unjudgeable" are very different, and
+#      the second is the common case.
+
+# One listing's history — did our last three attempts move anything?
+GET /agents/v1/analytics/interventions?product=<uuid>
+```
+
+Two things not to do. Do not attribute a `confounded` result to whichever edit
+was most recent — that is precisely the guess the verdict exists to refuse. And
+do not re-edit a listing whose previous change is still `pending`: you will
+confound your own experiment and neither change will ever be judgeable.
