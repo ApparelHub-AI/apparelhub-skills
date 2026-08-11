@@ -628,3 +628,63 @@ and should not defer an item at all (see `error-handling.md`). Only an explicitl
 
 **Idempotency.** A present-and-mapped item is skipped; a product that exists but isn't mapped gets
 mapped (`sync_to_fulfillment`), never duplicated. Match products by a stable name you control.
+
+---
+
+## Phase 9 — A synced listing is not permanently live. Check its health.
+
+**A successful sync is a fact about the past.** Sales channels remove and deactivate
+listings on their own — moderation, policy review, a category rule, a seller action in the
+channel's own admin — and they do not ask first. TikTok Shop in particular re-reviews
+listings after edits. So a product that synced cleanly can be gone an hour later, and
+nothing about the sync response tells you that.
+
+⛔ **Do not report a listing as live because `sync_status` says `Synced`.** That field is
+what WE believe we published. `health` is what the CHANNEL last said. When they disagree,
+the channel wins.
+
+### Reading it
+
+Every entry in `channel_statuses` (MCP `list_my_products`) / `ecommerce_statuses`
+(`GET /agents/v1/store/<store_uuid>/products`) carries:
+
+| Field | Meaning |
+|---|---|
+| `health: "Removed"` | Gone from the channel — deleted or taken down. `sync_status` also reverts to `Not Synced`, because a removed listing is by definition no longer synced. |
+| `health: "Needs Attention"` | Still on the channel but **not visible to buyers** — deactivated, frozen, or failed review. It will not sell in this state. |
+| `health: "Unknown"` | We could not reach the channel. **Not a claim that anything is wrong.** Do not report a problem on this. |
+| `health: "In Sync"` | The channel confirms it is live. |
+| `health` absent / null | **Never checked.** This is NOT the same as healthy — say "not checked", not "fine". |
+| `health_reason` | The channel's own explanation, when it gave one. Often the only actionable detail. |
+| `health_checked_at` | How stale the above is. |
+
+`external_id` is always a **string**. Channel product ids can exceed 2^53, so handling one
+as a number silently corrupts it — never parse it into a numeric type.
+
+### What to do about each
+
+- **`Removed`** — tell the merchant WHAT was removed and, if `health_reason` is present,
+  why. ⛔ **Do not immediately re-sync it.** The channel removed it for a reason; pushing
+  the same listing back unchanged tends to get it removed again, and repeated churn on the
+  same product is itself a risk to the shop. Fix the flagged problem first, then re-sync.
+  If no reason was given, say so and point the merchant at the channel's own notifications.
+- **`Needs Attention`** — same care, but the listing still exists, so this is usually an
+  edit rather than a rebuild. Do not delete and recreate to "reset" it.
+- **`Unknown`** — retry later. Reporting it as a problem is the mistake here.
+- **absent** — you have no information. Request a check rather than assuming.
+
+### Requesting a fresh check
+
+`GET /agents/v1/store/<store_uuid>/products?refresh_health=<product_uuid>` re-checks that
+one product against every connected channel and returns the fresh result.
+
+It costs one live channel call per synced listing, so use it to confirm a specific
+suspicion — not as a polling loop. You usually do not need it: health updates on its own
+when a channel notifies the platform, and a daily background sweep re-checks listings that
+have not been looked at recently.
+
+### The reporting rule
+
+When asked "is my product live?", answer from `health`, and name the gap when there is
+one. "Synced two weeks ago, health never checked" is an honest answer. "It's live" is not,
+unless the channel actually said so.
