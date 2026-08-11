@@ -12,7 +12,13 @@ and Enterprise only. On a lower tier every call returns `403 feature_unavailable
 needs a Professional+ plan.
 
 All six are `GET`, all take the same date-range + currency + store params, and
-all are workspace-scoped like every other agent endpoint (section 7). Full field
+all are workspace-scoped like every other agent endpoint (section 7).
+
+> **These are built from ORDERS, so they only know what SOLD.** A listing that
+> hundreds of people viewed and nobody bought is indistinguishable here from one
+> nobody has ever seen — both read as "0 sold". To tell those apart, and to find
+> out *why* something is not selling, use
+> **`references/channel-performance.md`** (`/agents/v1/analytics/channel/*`). Full field
 schemas live in the served OpenAPI spec (`GET /agents/v1/openapi.json`, **Analytics**
 tag) — this file teaches the shapes + the three semantics that trip agents up
 (tier gate, currency segmentation, margin coverage).
