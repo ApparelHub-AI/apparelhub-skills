@@ -89,7 +89,30 @@ agree with each other.
 
 ---
 
-## 3. The six states, and what each one means you should do
+## 3. Read the shop verdict BEFORE any listing state
+
+`summary.shop` answers a question that comes before every per-listing question:
+**is this shop being served at all?**
+
+| `shop.state` | Meaning |
+|---|---|
+| `ok` | There is enough traffic to judge individual listings |
+| `no_channel_traffic` | The channel is reporting, but almost nobody is being shown anything |
+| `no_data` | Nothing reported for this range at all — check `coverage` |
+
+When it says `no_channel_traffic`, **stop and say so.** No per-listing state
+means anything yet, `summary.archivable` will be empty, and `top_opportunities`
+will be thin — not because the listings are fine, but because none of them has
+had a fair hearing. `shop.peak_impressions` is the number to quote: it is the
+best any listing managed, and if it is in the low tens the honest finding is a
+distribution problem. Editing a title cannot help a listing nobody is shown.
+
+Telling a merchant "your listings look fine" when the truth is "nothing is
+reaching anyone" is worse than saying nothing.
+
+---
+
+## 3b. The seven states, and what each one means you should do
 
 `listings[].state` is the decision. It is computed against **this store's own
 distribution**, not fixed thresholds, so it means the same thing whether the
@@ -101,18 +124,26 @@ shop does 200 impressions a day or 200,000.
 | `conversion_blocked` | Plenty of impressions, few clicks | Fix the **listing card**: title, main image, price shown in the feed |
 | `pdp_blocked` | They click, then do not buy | Fix the **product page**: images, description, price, variants |
 | `starved` | Too few people have seen it to judge | **Discovery** — content, affiliate, ads. NOT a listing rewrite |
-| `dead` | No meaningful activity at all | The only state where archiving is appropriate |
+| `dead` | No meaningful activity, on a shop that *does* get traffic | The only state where archiving is appropriate |
+| `no_channel_data` | Synced, but the channel has never reported it — not even a zero | Check the listing is actually live on the channel |
 | `insufficient_data` | Not enough signal, or unreported | Nothing. Wait for data |
 
-Two of these are easy to get wrong:
+Three of these are easy to get wrong:
 
 **`starved` is not a listing problem.** Rewriting the title of a listing nobody
 has seen accomplishes nothing and looks like flailing to the merchant. Low
 exposure is a traffic problem. Send it to discovery.
 
-**`dead` is the only archivable state.** In particular `conversion_blocked` is
-the *opposite* of dead: the demand is already proven and only the listing is in
-the way. Archiving it destroys the best opportunity in the catalogue.
+**`dead` is the only archivable state**, and it can only occur on a shop with
+measurable traffic. `conversion_blocked` is the *opposite* of dead: the demand
+is proven and only the listing is in the way. Archiving it destroys the best
+opportunity in the catalogue.
+
+**`no_channel_data` is not weak performance — it is absence.** The channel is
+behaving as though the listing does not exist: no impressions, no clicks, not
+even a zero. That is nearly always a live/approval problem (pending review, out
+of stock, delisted), and neither archiving nor a copy rewrite touches it. Its
+metrics come back **absent, not zero**, for exactly this reason.
 
 ---
 
@@ -122,22 +153,27 @@ the way. Archiving it destroys the best opportunity in the catalogue.
 # 1. What can this account even see?
 GET /agents/v1/analytics/channel/coverage
 
-# 2. Where is demand being wasted right now?
+# 2. Is the shop being served at all? If not, STOP HERE and report that.
 GET /agents/v1/analytics/channel/summary
+#    -> summary.shop.state == 'no_channel_traffic' means no listing state
+#       below it is meaningful yet. Quote shop.peak_impressions and say the
+#       problem is distribution. Do not proceed to step 3.
+
+# 3. Where is demand being wasted right now?
 #    -> summary.top_opportunities: proven demand, broken conversion,
 #       ranked by how many people saw it and did not buy
 #    -> summary.archivable: ONLY the genuinely inert listings
 
-# 3. Fix the top opportunity, using the state to pick WHICH fix
+# 4. Fix the top opportunity, using the state to pick WHICH fix
 #    conversion_blocked -> the card. On TikTok, the listing-quality tools
 #    (references/tiktok-listing-quality.md) fix titles and search terms.
 #    pdp_blocked        -> the product page: images, description, price
 
-# 4. Come back in a week and re-read the same listing's state.
+# 5. Come back in a week and re-read the same listing's state.
 #    That is how you find out whether the fix actually worked.
 ```
 
-Step 4 is the half that never existed before. You could always change a listing;
+Step 5 is the half that never existed before. You could always change a listing;
 you could not tell whether it helped. Now you can — but give it time: the data
 is daily and the channel finalises it a couple of days in arrears.
 
