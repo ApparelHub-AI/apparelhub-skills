@@ -460,6 +460,22 @@ curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/<provider_uuid>/produc
 
 Or use the quick-reference variant tables in `references/garment-catalog.md`.
 
+### Updating a product that's ALREADY synced — adding variants later
+
+`add_variants` is NOT the finish line when the product is already synced. A newly added variant starts with **no fulfillment link**, and until you re-sync it is unfulfillable: the webhook that ingests a paid sales-channel order **silently drops any line whose variant has no fulfillment link**, and manual order / cost-estimate creation rejects it. The listing can look perfectly live on the channel while orders for the new size never reach the provider.
+
+So after adding variants to a product that was already synced:
+
+1. **Re-run Phase 7** (`sync_to_fulfillment` / `?target=merchandise`). This stamps each new variant's fulfillment link. Re-syncing an already-synced product is safe and idempotent.
+2. **If the product is LISTED on a sales channel, re-run Phase 8** for that channel so the new variants appear on the storefront.
+
+**Confirm it worked by reading the variants back** — `GET /agents/v1/product/<product_uuid>` (or `list_my_products`). On each variant:
+
+- **`provider_external_id`** (the same value as the legacy `external_id`) is the FULFILLMENT-provider link. **`null` = not yet synced to fulfillment** → re-run Phase 7. Non-null = fulfillable.
+- ⚠️ **This is NOT a storefront id.** It only collides in NAME with the channel-level `external_id` under `ecommerce_statuses[]`, which is the storefront LISTING id. A `null` variant `provider_external_id` says nothing about the channel — read `ecommerce_statuses[]` for channel state.
+
+**On TikTok Shop and Wix**, a variant sync edits the WHOLE listing at once and cannot report which SKUs it created vs updated. If a sync response carries `classification_basis: channel_listing_snapshot`, its `added` / `updated` split is a diff against the live listing taken BEFORE the sync — so a variant a prior whole-product sync already pushed shows up as `updated`, not `added`. **Confirm a new variant reached such a channel by re-reading the listing, not by the added/updated counts.** Shopify and WooCommerce report `classification_basis: per_variant_api`, which IS an authoritative per-variant create/update.
+
 ---
 
 ## Phase 6 — Associate the product with the user's store ("map to store", part 1)

@@ -458,6 +458,16 @@ Phase 7 sync to `target=merchandise` returns `400 No valid variants found to syn
 
 **Fix**: go back and run Phase 5 (one variant at a time, no batch endpoint). Verify with `GET /agents/v1/product/<uuid>/variants` before retrying sync.
 
+### Variants added LATER show `provider_external_id: null` — re-sync to fulfillment
+
+Symptom: you added variants to a product that was ALREADY synced, every call returned success, but reading the product back shows the new variants with `provider_external_id` (a.k.a. `external_id`) **`null`** while the original variants have it. Orders for the new variants may not reach the provider.
+
+**Cause**: `provider_external_id` is the variant's FULFILLMENT-provider link, stamped during the fulfillment sync — not by `add_variants`. Until it is stamped, the webhook that ingests a paid order **skips that line** (and manual order / estimate creation rejects the variant). The listing looks fine; the order silently under-fulfills.
+
+**Fix**: re-run the fulfillment sync — `sync_to_fulfillment(product_uuid, store_uuid)` (MCP), or Phase 7 `?target=merchandise` (REST) — then re-read the product and confirm every variant now has a non-null `provider_external_id`. If the product is also listed on a channel, re-run the channel sync too. See `product-creation-pipeline.md` → "Updating a product that's ALREADY synced."
+
+**A name collision to know (not a bug)**: the variant-level `provider_external_id` / `external_id` is the FULFILLMENT link; the channel-level `external_id` under `ecommerce_statuses[]` is the storefront LISTING id. A null variant link says nothing about the channel — do not read it as "the channel lost the product."
+
 ### 0 variants added — the requested colors/sizes don't exist on the garment
 
 Symptom: you called `add_variants` but the product ends with 0 (or fewer than expected) variants. On MCP v0.3.1+ `add_variants` throws `bad_request` listing the garment's real colors/sizes; older behavior returned `variants_added: 0` silently and shipped an unsellable product (this is what left a World-Cup Cap with 0 variants).
