@@ -535,7 +535,13 @@ curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/product/<product_uuid>" \
 
 Category placement is resolved automatically from the product/garment name (a "tee" lands under apparel T-shirts, not golf accessories). If a product needs a specific TikTok category, that's a per-product override on the product's metadata — ask the merchant for the desired category rather than guessing.
 
-**Size charts are automatic for apparel.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image) — you don't need to build or attach one. It's best-effort: if the provider has no measurements for that garment, the chart is simply omitted (the listing still syncs). Nothing for you to do here.
+**Size charts are automatic for apparel — but only where the provider publishes measurements.** When a product syncs to TikTok, a size chart is generated from the fulfillment provider's real per-size measurements (rendered to a table image), so usually you don't need to build or attach one.
+
+Not every provider publishes them. Printful exposes a size-guide API; Printify and Gelato do not. For a blank from a provider without one the chart is omitted and the listing still syncs, **but TikTok flags US apparel with no size chart as a critical issue**, so it will not perform. If a merchant reports that, check which provider fulfills that product before assuming something is broken — this is a provider data gap, not a sync failure.
+
+The fix is per listing: the merchant creates a size chart template in TikTok Seller Center and you set `size_chart_template_id` in **that product's** listing attributes. It is deliberately per-product, not shop-wide — a size chart describes the garment, so one shop-wide value would replace the accurate auto-generated chart on every other listing at once. TikTok publishes no endpoint for listing templates, so the id has to come from the merchant; never guess one.
+
+Worth knowing: the same blank is often carried by more than one provider, so measurements published for a garment by one provider are usually the correct chart for the same garment fulfilled by another.
 
 **Compliance attestations (e.g. CA Prop 65) are the MERCHANT's, not yours.** TikTok apparel listings may ask for legal attestations (CA Prop 65: Repro. Chems / Carcinogens, Dangerous Goods, Organic Textile). **Never invent, guess, or set these on the merchant's behalf** — they are legal statements. They are configured ONCE by the merchant at the TikTok integration level and then apply to every synced listing automatically. If a listing is flagged for missing compliance, tell the merchant they need to set their TikTok compliance answers on the integration; do not answer for them.
 
