@@ -25,25 +25,43 @@ retail price you set), `uuid`, `color`, `size`, `sku`,
   "cost": 21.68, "price": 25.51, "provider_variant_id": "104651" }
 ```
 
-**Cost is populated by the fulfillment sync.** A freshly-created product
-has no cost until you sync it to its fulfillment provider
-(`POST /store/<store>/products/<product>/sync?target=merchandise`) — that
-sync is when the provider returns real production cost per variant. So
-the order is always: create → add variants → associate with store →
-**sync to fulfillment (populates cost)** → read costs → set prices.
+**Cost is resolved when each variant is created**, not by a later sync.
+`add_variants` fills it in from whatever source that provider has:
+
+- **Printful and Gelato** publish production cost in their catalogs, so
+  it is available before you build anything.
+- **Printify does not publish cost in its catalog.** Its cost becomes
+  known when the product is created on Printify's side, which is what
+  **generating a mockup** does. So on the normal build order (mockup →
+  create → variants) a Printify product ends up with real per-variant
+  cost and nobody types anything in. `ship_product` already does this in
+  the right order.
+
+The one case that leaves cost empty is a Printify product built with **no
+mockup generated**. Then there is nothing to read and the merchant enters
+it by hand. That is the exception, not the normal path.
+
+Do not tell a user to look a cost up in the provider's own catalog and
+retype it. That was true once and is not any more.
 
 ### Two traps that make cost look "unavailable"
 
 - **The product-detail endpoint omits it.**
   `GET /agents/v1/product/<uuid>` does NOT include the `variants` array
   at all, so it shows no cost. Use the **store products list** above.
-- **Catalog cost can be `null`.** The catalog/browse cost
-  (`GET /agents/v1/merchandise/<provider>/product/<ref>` variants, and
-  the product's `provider-options`) is the *supplier catalog* cost, and
-  some providers (notably **Printify**) return it as `null` there. Do
-  NOT conclude "this product has no cost" from a null catalog price —
-  the real per-variant cost appears on the *product's* variants after
-  the fulfillment sync.
+- **Catalog cost can be `null`, and `cost_source` tells you why.** The
+  catalog/browse cost (`GET /agents/v1/merchandise/<provider>/product/<ref>`
+  variants, and the product's `provider-options`) now carries a
+  `cost_source` field alongside `price`:
+
+  | `cost_source` | Meaning |
+  |---|---|
+  | `live` | Read from the provider catalog on this request (Printful, Gelato) |
+  | `cached` | A snapshot captured when that blank was last built here (Printify). `cost_captured_at` gives its age |
+  | `unavailable` | No cost known. `price` is `null` |
+
+  A `cached` cost is a snapshot, not a quote — check `cost_captured_at`
+  before leaning on it, and say so if you quote it to a user.
 
 ---
 

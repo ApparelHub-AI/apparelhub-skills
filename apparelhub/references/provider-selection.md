@@ -162,8 +162,38 @@ garment's decoration method, the refusal already carries the answer:
 Once more than one provider can make the item:
 
 1. **Cost.** Compare with `get_garment_details` on the shortlisted
-   garments. Per-variant cost can be `null` on some providers until a
-   fulfillment sync populates it — see `references/pricing.md`.
+   garments, and **read `cost_source` before comparing anything**:
+
+   - `live` — the provider publishes cost in its catalog (Printful,
+     Gelato). Directly comparable.
+   - `cached` — a snapshot from the last time that blank was built here
+     (Printify, which publishes no catalog cost). Usable, but check
+     `cost_captured_at`; an old one may have moved.
+   - `unavailable` — no cost known. **This is the one that matters.**
+
+   When a shortlisted garment comes back `unavailable` you have two
+   honest options, and no third one:
+
+   - Build that candidate. Generating a mockup is what makes Printify
+     report its cost, so the number exists afterwards.
+   - Compare on what you do know, and **say which provider's cost you
+     could not get.**
+
+   Never present a cost comparison with a provider silently missing from
+   it. A table with a quiet gap reads as complete and gets acted on as
+   though it were.
+
+   Two limits to state whenever you give a cost comparison:
+
+   - This is **base production cost**. It excludes shipping and tax, and
+     shipping is often what actually decides between two providers on
+     bulky or heavy items.
+   - `estimate_order_costs` covers production plus shipping plus tax, but
+     only for **Printful and Gelato**. There is no landed-cost estimate
+     for Printify, so a true landed comparison across all three is not
+     something you can produce today. Do not imply otherwise.
+
+   See `references/pricing.md` for how cost gets onto a variant.
 2. **Decoration quality.** A printed cap and an embroidered cap are
    different products, not two ways of making one. If the user asked for
    an embroidered look, `accepts_photoreal: false` is what you want.
