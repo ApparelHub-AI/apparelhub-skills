@@ -21,7 +21,7 @@ some of those are legal statements.
 ```
 describe_listing_attributes   ->  learn the fields and allowed values
 set_listing_attributes        ->  store the values (per product)
-set_channel_settings          ->  store the shop-wide ones (compliance, brand, templates)
+set_channel_settings          ->  store the shop-wide ones (compliance, templates)
 sync_to_channel               ->  push the listing, which is what makes it real
 ```
 
@@ -152,14 +152,32 @@ invent. A value you made up is silently wrong metadata on a live listing.
 
 | scope | set with | examples |
 |---|---|---|
-| `product` | `set_listing_attributes` | material, style, fit, care instructions |
-| `integration` | `set_channel_settings` | compliance answers, brand, shipping template, size-chart template |
+| `product` | `set_listing_attributes` | material, style, fit, care instructions, **brand** |
+| `integration` | `set_channel_settings` | compliance answers, shipping template, size-chart template |
 
 A field's `scope` tells you which. Shop-wide settings apply to **every** listing on
 that channel, so they are answered once rather than per product — and existing
 listings pick them up on their next sync.
 
-Some shop-wide settings are ids (brand, shipping template). Where the channel can
+### Brand is resolved for you, from the blank
+
+**Brand is per product, not per shop**, because it is a property of the blank: a shop
+selling Comfort Colors tees and Gildan hoodies has two different brands, and one
+shop-wide value cannot express that.
+
+You almost never need to set it. The platform reads the manufacturer from the
+fulfillment provider and resolves it to the channel's own brand id automatically, so
+an unset brand usually fills itself in on the next sync.
+
+When it does not resolve, that is deliberate rather than a failure. Channel brand
+registries contain many near-identical entries — searching one real registry for
+`Gildan` returns 147 results including `GILDAN PLATINUM` and `Jerzees or Gildan` —
+so the match is exact or nothing. **A brand left unset is honest; a wrong one is a
+false claim about who manufactured the merchant's goods.** If you want it set anyway,
+confirm the right value with the merchant rather than picking the closest looking
+option.
+
+Some shop-wide settings are ids (shipping template). Where the channel can
 list the options, they arrive in `allowed_values` so you never have to send the
 merchant hunting for an id. An empty list with a `help` note means the shop
 genuinely has none available — for example a shop with no brand authorisation,
