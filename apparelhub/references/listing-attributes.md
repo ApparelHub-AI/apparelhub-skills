@@ -152,8 +152,8 @@ invent. A value you made up is silently wrong metadata on a live listing.
 
 | scope | set with | examples |
 |---|---|---|
-| `product` | `set_listing_attributes` | material, style, fit, care instructions, **brand** |
-| `integration` | `set_channel_settings` | compliance answers, shipping template, size-chart template |
+| `product` | `set_listing_attributes` | material, style, fit, care instructions, **brand**, **size chart** |
+| `integration` | `set_channel_settings` | compliance answers, shipping template, fallback size chart |
 
 A field's `scope` tells you which. Shop-wide settings apply to **every** listing on
 that channel, so they are answered once rather than per product — and existing
@@ -177,6 +177,62 @@ false claim about who manufactured the merchant's goods.** If you want it set an
 confirm the right value with the merchant rather than picking the closest looking
 option.
 
+### Size charts: import the numbers, never invent them
+
+US apparel is graded down without a size chart, and **the size chart is per product**
+for the same reason brand is — it describes the blank.
+
+Most listings need nothing from you. A chart is rendered automatically from the
+fulfillment provider's own per-size measurements and attached at sync. It only needs
+attention when a listing is actually flagged for it, which happens when the provider
+publishes no measurements for that blank.
+
+When that happens there are two fields, and the choice matters:
+
+| field | what it is | use it |
+|---|---|---|
+| `size_chart_measurements` | the measurements themselves, an object | **prefer this** |
+| `size_chart_template_id` | an id for a template built in the channel's admin | only if the merchant already has one |
+
+Prefer the measurements. The template id can only come from a human working in the
+channel's own admin, because the channel publishes no way to list templates — so you
+cannot discover one, check that an existing one is right, or fix a wrong one. The
+measurements are data you can read back and correct.
+
+Start by importing rather than asking:
+
+```
+import_size_measurements   store_uuid, product_uuid
+```
+
+That returns the provider's real table in exactly the shape
+`size_chart_measurements` takes, so it can go straight back through
+`set_listing_attributes` once the merchant is happy with it. `available: false` is an
+answer, not an error, and the `reason` tells you what to do next:
+
+| reason | what it means |
+|---|---|
+| `provider_publishes_no_size_guide` | this provider has no size-guide API at all — permanent, ask the merchant for the manufacturer's own numbers |
+| `no_size_guide_for_this_blank` | the provider has one, just not for this item (normal for non-apparel) |
+| `provider_lookup_unavailable` | transient; retry |
+| `product_has_no_fulfillment_provider` | nothing to import from |
+
+**Say where the numbers came from.** The response carries a `source` naming the
+provider and the catalog item. These are measurements a buyer makes a purchase
+decision on, published under the merchant's name, so present them as that provider's
+figures for a specific blank rather than as something you know.
+
+⛔ **Never invent measurements.** Do not derive a table from the garment type, do not
+copy one from a similar product, and do not fill a gap with a plausible number. A
+malformed table is refused whole with a reason — nothing is half-applied. A missing
+cell is fine and renders blank. An invented one means somebody receives a garment
+that does not fit, which is worse than the listing having no chart at all.
+
+The shop-wide `default_size_measurements` exists for a catalogue that is a single
+blank. It is a **fallback**, below the provider's own table, so a shop that later
+adds a second blank does not silently inherit the first blank's sizing. With a mixed
+catalogue, set the measurements per listing instead.
+
 Some shop-wide settings are ids (shipping template). Where the channel can
 list the options, they arrive in `allowed_values` so you never have to send the
 merchant hunting for an id. An empty list with a `help` note means the shop
@@ -191,6 +247,7 @@ which is a normal state, not a fault.
 describe_listing_attributes   store_uuid, product_uuid?, integration_uuid?, include_values?
 set_listing_attributes        store_uuid, product_uuid, values{}, remove[]?, sync?
 set_channel_settings          store_uuid, integration_uuid, values{}, remove[]?
+import_size_measurements      store_uuid, product_uuid
 ```
 
 - Omit `product_uuid` on describe to get the shop-wide fields; `integration_uuid` is
@@ -198,3 +255,6 @@ set_channel_settings          store_uuid, integration_uuid, values{}, remove[]?
 - `integration_uuid` is otherwise only needed when the store has more than one
   channel connected. Ambiguity is refused with the candidates listed, never guessed.
 - A locked integration refuses writes.
+- A field whose `value_type` is `object` takes a structure, not a string. Its shape
+  is published in `channel_ref.object_schema` — build the value from that rather
+  than guessing at it.
