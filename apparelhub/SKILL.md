@@ -231,7 +231,7 @@ reference up front saves you from shipping a broken product.
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
 | **Channel-defined listing fields** (product attributes, item specifics, category metafields — "set the material", "fill in the compliance answers", "the channel says the listing is incomplete") | `references/listing-attributes.md`. Call `describe_listing_attributes` FIRST — field names and allowed values are defined by the channel per category, so they cannot be guessed and a mismatch is refused. Setting a value does NOT reach the channel until a sync. ⛔ Compliance answers are LEGAL ATTESTATIONS: relay what the merchant tells you, never choose one, and leave it unset if they have not answered. **Size charts** live here too: apparel is graded down without one, so when a listing is flagged, `import_size_measurements` then set `size_chart_measurements` — never type in measurements you were not given. |
 | Variant IDs, pricing, color limit, BC 3001 vs Comfort Colors trade-off | `references/garment-catalog.md` |
-| **Costs & margin pricing** — reading per-variant cost, setting prices to a target margin, pricing floors | `references/pricing.md`: per-variant `cost` lives on the **store-products list** (`GET /store/<store>/products` → `variants[].cost`), NOT on product-detail, and catalog cost can be `null` (esp. Printify); it's populated by the fulfillment sync; price each variant to `cost / (1 - margin)` |
+| **Costs & margin pricing** — reading per-variant cost, setting prices to a target margin, pricing floors | `references/pricing.md`: per-variant `cost` lives on the **store-products list** (`GET /store/<store>/products` → `variants[].cost`), NOT on product-detail; it is resolved when the variant is created (for Printify that needs a mockup first, which the normal build order already does); catalog cost carries `cost_source` = `live`/`cached`/`unavailable` — never compare providers without reading it; price each variant to `cost / (1 - margin)` |
 | Listing/inspecting orders, payment status, fulfillment status | `references/orders-and-fulfillment.md` includes the payment-authority rule (sales channel wins for storefront orders) |
 | **Managing orders** — approving/confirming/holding, the per-store fulfillment workflow (auto / confirm / review), smart guardrails, the agent approval queue, the opt-in signed callback | `references/orders-and-fulfillment.md` sections 8–10. Note the TWO distinct holds (ApparelHub approval vs Printful design hold). |
 | A 4xx / 5xx response, sync that didn't take, "Failed to fetch" UX | `references/error-handling.md` |
@@ -355,7 +355,7 @@ actually charged the card), see `references/orders-and-fulfillment.md`.
 
 The **store-products list** above carries each product's `variants` array,
 and each variant has both `price` (retail) and `cost` (provider production
-cost, populated after the fulfillment sync). That's the place to read cost
+cost, resolved when the variant is created). That's the place to read cost
 for margin pricing — product-detail (`GET /product/<uuid>`) omits variants.
 See `references/pricing.md`.
 
