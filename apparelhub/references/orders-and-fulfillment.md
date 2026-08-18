@@ -173,10 +173,33 @@ curl -sS -X PATCH "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/settin
 - `hold_orders_above_amount` (number or null) — hold when order total exceeds this.
 - `hold_below_margin_pct` (number or null) — hold when profit margin % is below this.
 - `hold_on_negative_margin` (bool) — always hold an order that would lose money.
+- `hold_first_time_customer` (bool) — hold the first order from a new customer.
+- `hold_channel_risk_review` (bool, **ON by default**) — hold an order the SALES
+  CHANNEL has flagged as under its own risk review.
 
 When a guardrail trips, the order is held with `hold_reason` set to one of
-`high_value` / `low_margin` / `negative_margin`; review-mode holds use
-`review_mode`.
+`high_value` / `low_margin` / `negative_margin` / `first_time_customer` /
+`channel_risk_review`; review-mode holds use `review_mode`.
+
+### `channel_risk_review` behaves differently from the others — know this before you act
+
+The other guardrails only apply once the store's `fulfillment_mode` has already
+let an order through. This one **overrides the mode, including `auto`**, because
+the signal is not our judgement about the order — it is the channel saying it may
+still void the sale. Sending it to fulfillment would mean paying to print a
+garment for an order that can disappear.
+
+What that means for you:
+
+- **Do not "fix" it by flipping the store to `auto`.** It will still hold. If a
+  merchant genuinely wants these orders to flow, the setting to change is
+  `hold_channel_risk_review: false`, and that is their call, not yours.
+- **The next step is usually to WAIT, not to decide.** A `channel_risk_review`
+  hold typically clears on its own when the channel finishes reviewing, unlike
+  `high_value` or `low_margin`, which wait on a human. Reconciling the order
+  (section 12) pulls the channel's current state on demand.
+- The order is fully visible and real — `payment_status` is `paid`, because the
+  buyer WAS charged. Only fulfillment is held.
 
 ---
 
