@@ -52,11 +52,50 @@ Why green specifically:
 - High contrast against anti-aliased design edges
 - Flood-fills cleanly with no ambiguity between background and design pixels
 
+**Pick a background that CONTRASTS with your subject.** The background is removed by matching that colour, so any part of the artwork sharing it is removed too. A green dragon on a green screen keys the dragon away. Use one of three: `#00FF00` (default), `#FF00FF` when the subject plausibly contains green, `#0000FF` when it contains magenta or pink as well. Pass your choice as `background_color` on `/images/generate`, and make sure the prompt names the same colour — the generator only ever sees the prompt.
+
 The actual keying is done in Phase 2 by the bundled `scripts/make_transparent.py` — see `references/product-creation-pipeline.md`. Note the AI rarely returns *exactly* `#00FF00` (corners often come back muted, e.g. `#52C06E`); the script auto-detects the real corner color, so don't assume pure green.
+
+### The platform now prepares placed designs automatically
+
+Text-to-image generations intended for a placed print are keyed to transparency **server side, at generation time**. The design you get back is the prepared one, and its `print_ready` block on the generate response (and on the async status poll) says what was done:
+
+| `print_ready` | Meaning | What you do |
+|---|---|---|
+| `applied: true` | Background removed. | Nothing. Do NOT key it again — `process_transparency` will refuse with `already_transparent`. |
+| `reason: all_over_intent` | Left opaque on purpose. | Nothing. This is correct for full-bleed. |
+| `reason: subject_consumed` | The artwork shared its background colour. | Generate again with a different `background_color`. |
+| `reason: no_background_found` / `chroma_not_green` | Could not key it. | Check the mockup before creating the product; `process_transparency` with an explicit `--chroma`, or regenerate. |
+
+**This does not make `process_transparency` obsolete.** It still applies to designs you UPLOADED (never auto-prepared), designs generated before this shipped, and any design where auto-prepare refused. Read `print_ready.applied` rather than assuming either way.
 
 For all-over-print products (pillows, doormats, AOP tees, luggage tags): SKIP this rule. Those need the design to cover edge-to-edge including the background. See `references/all-over-print.md`.
 
 For embroidery: same rule applies — transparent backgrounds work (the bare garment fabric shows through where the design is transparent). See `references/embroidery.md`.
+
+---
+
+## 3b. An opaque background prints as a rectangle — check `design_check`
+
+**Any** design with an opaque background, placed on a garment, prints as a solid coloured rectangle. Not just an un-keyed green screen: an uploaded JPEG, a photo, a design on a grey card. This is the single most common way a product ships visibly broken.
+
+The mockup poll (`GET /merchandise/product/preview/{provider}/job/{job}`) and the preview-jobs listing return a **`design_check`** block when the design behind that mockup will do this. It is absent when there is nothing to say, so its presence IS the finding:
+
+```json
+"design_check": {
+  "code": "opaque_background",
+  "severity": "warning",
+  "background_state": "opaque_box",
+  "message": "This design has a solid background, so it will print as a coloured rectangle...",
+  "next": { "action": "remove_background", "image_uuid": "..." }
+}
+```
+
+`ship_product` and `create_product` carry it through as a warning, so an unattended run sees it **before** the product is created. Fix it with `process_transparency` (or `POST /images/generated/{uuid}/remove-background`, which costs no generation quota), then **render the mockup again** — the previews you are holding were rendered from the old design.
+
+**It is gated to PLACED prints only.** A full-bleed / all-over design is supposed to be opaque edge to edge, so it is never flagged, and you must not "fix" one. Check `print_style` before acting on anything you infer yourself.
+
+Designs are reported as one of four `background_state` values: `transparent` (ready), `opaque_box` (will print as a rectangle), `opaque_varied` (opaque but a photograph, with no flat border to remove, so removing a background is the WRONG move), and `unknown` (not inspected; say nothing).
 
 ---
 
