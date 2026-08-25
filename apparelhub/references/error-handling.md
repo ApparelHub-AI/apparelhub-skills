@@ -480,14 +480,36 @@ credential. Fix the body — the wire field is `pat` — and retry the same toke
 returns `healthy` as `true`, `false`, **or `null`**.
 
 - `true` — the stored credential works.
-- `false` — genuinely broken; `reason` is `token_revoked`, `insufficient_scope`,
-  `not_connected`, or `no_token`. The merchant has to act.
-- `null` — **unknown**, with `reason: provider_unreachable`. The provider was
-  throttling us or unreachable, which says nothing about the credential.
+- `false` — genuinely broken. `reason` is `token_revoked`, `insufficient_scope`,
+  `reconnect_required`, `not_connected`, or `no_token`. The merchant has to act.
+- `null` — **unknown**. `reason` is `provider_unreachable` (they were throttling
+  us or were down) or `health_check_unsupported` (we have no way to probe that
+  provider). Neither says anything about the credential.
 
 Do not prompt anyone to reconnect on `null`. This endpoint used to report any
 failure as `token_revoked`, so a provider blip told merchants their working
 integration had been revoked.
+
+**`reconnect_required` is the one reason retrying can never fix.** It arrives
+with `remedy: "reauthorize"` and means an OAuth provider's refresh token is gone
+or was refused. Send the merchant back through that provider's connect flow. Do
+not retry, and do not ask them to paste a token — OAuth providers do not use one.
+
+### How the check works, and its one side effect
+
+The probe differs by how the provider authenticates, because the two models
+answer different questions:
+
+- **PAT / API key** (Printify, Gelato) — the credential is static, so the check
+  spends it against the provider.
+- **OAuth** (Printful) — the access token expires roughly hourly and is
+  refreshed on every store-scoped call, so its expiry proves nothing. The check
+  exercises the **refresh** token instead.
+
+⚠️ Because of that, checking health on an OAuth connection whose access token is
+near expiry **will refresh and persist a new one**. That is intended, and it is
+the same thing any other store-scoped call would have done, but it does mean
+this endpoint is not strictly read-only. Do not poll it in a loop.
 
 ---
 
