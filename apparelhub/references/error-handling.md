@@ -14,7 +14,7 @@ How to interpret API errors and the most common silent-failure modes.
 | 404 | Endpoint path wrong OR resource doesn't exist | Verify the path against `https://api.apparelhub.ai/agents/v1/openapi.json`. If the resource UUID is wrong, list to confirm. |
 | 409 | Conflict — usually integration locked, sales channel uniqueness violation, or duplicate product | Read the error body. See "Common 409 codes" below. |
 | 422 | Validation error — field-level issue with the request body | Read the error body. Field name mismatches are the most common cause (Phase 3 vs Phase 5 names — see `references/product-creation-pipeline.md`). |
-| 429 | Rate limited | Backoff exponentially. Default tier is 10 req/sec, 10K/mo. Professional is 50 req/sec, 50K/mo. Enterprise is 200 req/sec, 500K/mo. |
+| 429 | Rate limited — **read the body before deciding what to back off** | Two different things. No `error` field (or `platform_rate_limited`): YOUR key hit the platform throttle — back off exponentially. Default tier is 10 req/sec, 10K/mo. Professional is 50 req/sec, 50K/mo. Enterprise is 200 req/sec, 500K/mo. `error: provider_rate_limited`: the FULFILLMENT PROVIDER is throttling us and your key is fine — wait `retry_after` and retry the SAME request. See §2f. |
 | 500 | Server error | Retry ONCE with a 2-3s backoff. If it persists, capture the response body and tell the user there's a platform issue. Don't hammer it. |
 | 502 / 503 / 504 | Upstream gateway or timeout | Backoff and retry up to 3 times with exponential delays. After that, it's a platform issue. |
 
@@ -437,6 +437,57 @@ records the block, so you can tell. Where a compliance-checking capability is
 available to you (the MCP server exposes `check_design_compliance`), this is
 exactly the design to run it on. This is cheap and it keeps the merchant, whose
 name is on the product, out of an argument they did not choose.
+
+---
+
+## 2f. Connecting a fulfillment provider — the credential is not always the problem
+
+Connecting a provider that authenticates with a merchant-supplied credential
+(Printify uses a Personal Access Token, Gelato an API key) can fail for five
+different reasons, and only two of them are the credential's fault. The platform
+used to report all five as one sentence telling the merchant to check their
+token, which is how a real merchant ended up replacing a working credential and
+giving up. **Branch on `credential_at_fault`, not on the HTTP status.**
+
+Endpoints: `POST /agents/v1/store/{store}/merchandise_provider/{provider}/validate-pat`
+(dry run, persists nothing) and `.../connect-pat` (persists).
+
+| `reason` | HTTP | `credential_at_fault` | What to do |
+|---|---|---|---|
+| `invalid_token` | 400 | true | Ask the user for a new credential. It expired, was revoked, or got truncated on paste. |
+| `insufficient_scope` | 400 | true | The credential works but lacks a permission. Ask them to re-create it **with shop read access** — do not just ask for "a new token", they will make the same one again. |
+| `rate_limited` | 429 | false | The provider is throttling us. Wait `retry_after`, retry the SAME credential. Body carries `error: provider_rate_limited`. |
+| `provider_unavailable` | 502 | false | The provider is down. Wait and retry. |
+| `transport_error` | 502 | false | We could not reach the provider. Wait and retry. |
+
+⛔ **Never ask the user for a new credential when `credential_at_fault` is
+false.** That is the exact failure this contract exists to prevent: it sends
+someone to replace the one thing that was working, and it is how you lose a
+merchant mid-setup.
+
+The response also carries `message`, a merchant-facing sentence that is safe to
+show verbatim, and `provider`.
+
+### `error: missing_token` (400)
+
+Different, and worth separating: the request body carried no usable token, so
+**nothing was sent to the provider at all**. Do not report this as a rejected
+credential. Fix the body — the wire field is `pat` — and retry the same token.
+
+### Connection health is a tri-state
+
+`GET /agents/v1/store/{store}/merchandise_provider/{provider}/connection/health`
+returns `healthy` as `true`, `false`, **or `null`**.
+
+- `true` — the stored credential works.
+- `false` — genuinely broken; `reason` is `token_revoked`, `insufficient_scope`,
+  `not_connected`, or `no_token`. The merchant has to act.
+- `null` — **unknown**, with `reason: provider_unreachable`. The provider was
+  throttling us or unreachable, which says nothing about the credential.
+
+Do not prompt anyone to reconnect on `null`. This endpoint used to report any
+failure as `token_revoked`, so a provider blip told merchants their working
+integration had been revoked.
 
 ---
 
