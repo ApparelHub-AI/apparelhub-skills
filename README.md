@@ -32,6 +32,14 @@ GitHub release notes.
 - Generate an API key: <https://apparelhub.ai/developer/api-keys>
 - Security and trust model: [`SECURITY.md`](./SECURITY.md)
 
+**The agent surface, three ways**
+
+| Repo | What it is |
+|---|---|
+| **apparelhub-skills** (this repo) | The playbook your agent loads on demand: how to call the API correctly. |
+| [**apparelhub-mcp**](https://github.com/ApparelHub-AI/apparelhub-mcp) | The MCP tool server that exposes the pipeline as typed, callable tools. |
+| [**apparelhub-recipes**](https://github.com/ApparelHub-AI/apparelhub-recipes) | End-to-end operating blueprints you drop into your agent's runtime to run a whole store pattern. |
+
 ---
 
 ## What's in this repo
