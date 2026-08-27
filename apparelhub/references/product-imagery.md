@@ -271,9 +271,42 @@ merchant's name.
 
 Editing the real mockup keeps the product true and changes only its presentation.
 
-The mechanism is the existing img2img path in `references/design-rules.md` §5b:
-`POST /images/generate` with `source_image_uuid` set to the mockup, or the
-`iterate_design` MCP tool. Only Nano Banana and OpenAI support edit mode.
+**The mechanism is a dedicated path — use it rather than hand-rolling an edit.**
+`POST /images/generate` with `source_product_uuid` and a `style` preset. It resolves
+the product's best real mockup for you and applies a preset written to hold the
+product fixed while changing only its surroundings.
+
+| `style` | What you get |
+|---|---|
+| `on_model` | A person wearing the product |
+| `detail` | A close crop showing fabric and print texture |
+| `flat_lay` | Styled flat, shot from above |
+| `lifestyle` | The product in a real setting |
+
+Fetch the live menu from `GET /product/listing-image-styles` rather than hardcoding
+it — the preset text is the safety property, so a stale local copy can drift away
+from "edit the real mockup".
+
+**Do not send a `prompt` to satisfy a validator.** The preset *is* the prompt. A
+prompt you send is folded in as **extra guidance** ahead of the fidelity clause, so
+filler does not get ignored — it steers the generation. Send wording only when you
+actually want it (a setting or a mood, e.g. `"outdoors at golden hour"`), and leave
+it out otherwise.
+
+**A product with no mockup is refused, not generated from scratch.** That refusal is
+the constraint above doing its job. Render a mockup first, then ask again. Raw print
+artwork does not count as a mockup.
+
+MCP callers have `generate_listing_image`, which wraps all of this, restricts the
+model fallback to edit-capable models, and attaches only if you pass `attach: true`.
+Plain HTTP callers use the endpoint directly. The older generic img2img path
+(`source_image_uuid`, `iterate_design` — `references/design-rules.md` §5b) still
+works, but it applies no preset and enforces no no-mockup refusal, so prefer the
+dedicated path for listing photography.
+
+**This spends an image generation.** Four styles across thirty products is 120
+generations, more than some plans allow in total. Check the plan before looping over
+a catalogue.
 
 Entries land as:
 
