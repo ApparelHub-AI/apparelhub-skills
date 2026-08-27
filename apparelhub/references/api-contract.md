@@ -161,7 +161,7 @@ are normal during long polls; retry up to ~5 consecutive transient errors.
 |---|---|---|
 | `POST` | `/agents/v1/product/create` | Create the product shell. |
 | `POST` | `/agents/v1/product/{uuid}/variants` | Add ONE variant per call (no batch endpoint). |
-| `PATCH` | `/agents/v1/product/{uuid}` | Update fields like `display_image`, `gallery_images`. |
+| `PATCH` | `/agents/v1/product/{uuid}` | Update the product, including its listing imagery (`gallery_images`, `display_image`). Shape below. |
 | `DELETE` | `/agents/v1/product/{uuid}` | Hard delete (cascades to variants). |
 | `GET` | `/agents/v1/product/{uuid}` | Inspect. |
 | `GET` | `/agents/v1/product/{uuid}/provider-options` | List the variant matrix the provider exposes. |
@@ -223,6 +223,82 @@ One request per variant. There is no bulk endpoint.
 
 **Without variants, sync to fulfillment fails** with `400 "No valid
 variants found to sync"`. Add every color × size combo BEFORE syncing.
+
+### Product listing imagery
+
+`GET /agents/v1/product/{uuid}` returns the current imagery:
+
+```json
+{
+  "display_image": "https://cdn.apparelhub.ai/.../black-front.png",
+  "images": [
+    {
+      "url": "https://cdn.apparelhub.ai/.../black-front.png",
+      "source": "mockup",
+      "ai_generated": false,
+      "preview_uuid": "<preview_uuid>",
+      "image_uuid": null,
+      "thumbnail_url": "https://cdn.apparelhub.ai/.../black-front-thumb.png",
+      "added_at": "2026-08-20T14:02:11Z",
+      "alt": "Black tee, front"
+    }
+  ],
+  "images_version": 7,
+  "gallery_images": ["https://cdn.apparelhub.ai/.../black-front.png"]
+}
+```
+
+- **`images`** is the gallery, in listing order. Read this one.
+- **`images_version`** is an integer that increments on every gallery write — the
+  optimistic-concurrency token.
+- **`gallery_images`** (read side) is a flat array of URL strings, same order.
+  **Deprecated**, kept for back-compat; it carries no `source` / `ai_generated`, so
+  it cannot distinguish a mockup from a print file.
+
+`PATCH /agents/v1/product/{uuid}` writes it:
+
+```json
+{
+  "gallery_images": [
+    "https://cdn.apparelhub.ai/.../black-front.png",
+    { "url": "https://cdn.apparelhub.ai/.../studio.jpg",
+      "source": "upload",
+      "ai_generated": false }
+  ],
+  "display_image": "https://cdn.apparelhub.ai/.../black-front.png",
+  "expected_images_version": 7
+}
+```
+
+| Field | Notes |
+|---|---|
+| `gallery_images` | Bare URL strings OR objects (`{url, source, ai_generated}`), mixed freely. ⛔ **REPLACE in the order given — not a merge.** To add one image, read the current list, append, send the whole thing. `null` resets the gallery to the product's mockups. |
+| `display_image` | The cover. Independent of order. Auto-inserted into the gallery if absent. If you replace the gallery and omit the current cover, **the cover follows to the new first image**. |
+| `expected_images_version` | Optional. Mismatch → `409` (below). Send it whenever the list you are writing came from a list you read. |
+
+`source` values: `mockup`, `upload`, `ai_mockup`, `print_file`, `unknown`.
+`ai_generated` is tri-state — `true` / `false` / `null` (unknown, **not** no).
+
+Limits: max **20** images per product, **512** characters per URL, deduplicated by
+URL (a repeat collapses silently rather than erroring).
+
+Version conflict:
+
+```json
+409 {
+  "error_code": "images_version_conflict",
+  "current_version": 9,
+  "expected_version": 7
+}
+```
+
+Re-read the product, reapply your intent to the CURRENT gallery, and write again.
+Do not retry the same body.
+
+⛔ **`print_data[].image_url` is the PRINT FILE** (manufacturing) and is untouched by
+any of the above. An image with `source: "print_file"` is excluded from channel sync
+unless it is the product's only image. Full contract, ordering rules and channel
+caps: `references/product-imagery.md`.
 
 ### Stores and sync
 
