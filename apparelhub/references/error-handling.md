@@ -60,6 +60,16 @@ From `DELETE /images/generated/{uuid}`. A live (non-archived) product still uses
 
 This is a guard, not a dead end. **Archive the design instead** (`PATCH /images/generated/{uuid}` with `{"archived": true}`), which is reversible and leaves those products untouched. Only if the user explicitly wants the design erased permanently should you archive or delete the blocking products first and retry. Do not report "designs cannot be deleted" and abandon the task. See `references/design-rules.md` section 5d.
 
+### `images_version_conflict`
+
+From `PATCH /product/{uuid}` when you passed `expected_images_version` and the product's gallery changed underneath you (another session, or the merchant editing in the web UI). **Nothing was written.** The body carries `current_version` and `expected_version`.
+
+```json
+409 { "error_code": "images_version_conflict", "current_version": 9, "expected_version": 7 }
+```
+
+⛔ **Do not retry the same body.** It will fail identically, and if it somehow succeeded it would overwrite whatever the other writer did. Re-read the product, reapply your INTENT to the gallery as it is NOW (append your photo to the current list; reorder what is actually there), then PATCH again with the fresh `expected_images_version`. Replaying a stale array is precisely the overwrite the token exists to prevent. See `references/product-imagery.md` §7.
+
 ---
 
 ## 2a-bis. "I have a file and no way to use it" — uploading client artwork

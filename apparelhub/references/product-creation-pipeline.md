@@ -374,6 +374,10 @@ If the merchant has a specific color preference for the storefront thumbnail ("s
 
 Means no preview rows matched the front/back filename pattern. Run `ah_classify_previews /tmp/preview_job.json` without `--recommend` to see the raw rows — provider may be using a non-standard slug. Fall back to picking one manually from the table.
 
+### Changing imagery on a product that ALREADY exists
+
+Everything above is the create-time path. To attach a merchant's photo to a live product, reorder the gallery, or change the cover afterwards, see **`references/product-imagery.md`** — it covers `PATCH /product/<uuid>`, the fact that `gallery_images` REPLACES rather than merges, why gallery ORDER decides what ships on channels that cap listing images, and the `ai_generated` declaration.
+
 ---
 
 ## Phase 4 — Create the product
