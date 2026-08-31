@@ -60,6 +60,23 @@ From `DELETE /images/generated/{uuid}`. A live (non-archived) product still uses
 
 This is a guard, not a dead end. **Archive the design instead** (`PATCH /images/generated/{uuid}` with `{"archived": true}`), which is reversible and leaves those products untouched. Only if the user explicitly wants the design erased permanently should you archive or delete the blocking products first and retry. Do not report "designs cannot be deleted" and abandon the task. See `references/design-rules.md` section 5d.
 
+### `design_not_ready` / `design_processing_failed`
+
+From `POST /merchandise/product/preview`. The design has no published image yet, so there is nothing to build a mockup from. **This is a readiness condition, not a bad request** — the identical call succeeds once the design is ready.
+
+Branch on `error`; `retryable` tells you whether waiting can help:
+
+| `error` | `processing_status` | `retryable` | What to do |
+|---|---|---|---|
+| `design_not_ready` | `pending` / `processing` / absent | `true` | Poll `next.url` (the design status endpoint) until `processing_status` is `completed`, then repeat the preview call. Usually ready within a minute. |
+| `design_processing_failed` | `failed` | `false` | Terminal. **Waiting will never help.** Re-upload the design, or regenerate it via `next.redraw_with_ai`. `reason` carries the cause when one was recorded. |
+
+**Do not retry `design_processing_failed`.** It is the one case here where the state never changes on its own, so a retry loop burns your budget against a wall.
+
+This used to be an HTTP **500**. If you are working from older notes that treat a 500 on this endpoint as a platform outage, this is it — and the correct response is to poll, not to abandon the run.
+
+**The usual cause is simply ordering**: a design uploaded or generated moments ago is still processing. Poll the design to `completed` before requesting a mockup and you will not see this at all.
+
 ### `images_version_conflict`
 
 From `PATCH /product/{uuid}` when you passed `expected_images_version` and the product's gallery changed underneath you (another session, or the merchant editing in the web UI). **Nothing was written.** The body carries `current_version` and `expected_version`.
