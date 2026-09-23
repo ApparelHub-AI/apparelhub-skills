@@ -667,9 +667,11 @@ Symptom: product was created, `uuid` returned, but `manufacturing_metadata` is N
 
 Symptom: product created, but `display_image` auto-resolution picked the raw design URL instead of a mockup.
 
-**Cause**: the preview job's status was `completed` but the S3 ingestion hadn't finished yet. There's a two-phase race — job complete is one thing, S3 mirror populated is another. Gap can be 20+ minutes.
+**Cause**: you created the product before the mockups were published. `completed` now means published, so the usual cause is no longer a race — it is calling create while the job still reads `pending`, or on a job that ended `failed`.
 
-**Fix**: poll the preview-job/previews endpoint until at least one row has a non-null `preview_url` BEFORE calling product create. Or PATCH the product's `display_image` after the fact.
+**Fix**: poll with `ah_poll_mockup` until the job reports `completed`, then create. Or PATCH the product's `display_image` after the fact.
+
+> Older notes describe a two-phase race where `completed` could precede a populated `preview_url` by 20+ minutes. Publishing used to run *on the poll*, so nothing advanced until somebody polled again. It now runs on a background worker and `completed` is only reported once the mockups are published, so that gap is gone.
 
 ---
 

@@ -3,15 +3,21 @@
 ah_poll_mockup — block until a Printful/Printify mockup job is fully
 ready (status=completed AND at least one preview_url ingested).
 
-Value-add: the mockup pipeline has TWO completion gates, not one. The
-job reports `status=completed` as soon as the provider's mockup
-generator finishes its task. The per-preview `preview_url` field
-(populated when we mirror the mockup from the provider's CDN to our S3)
-lands separately and can lag the `completed` status by 20+ minutes. A
-naive poll that stops at `completed` will then try to use a preview row
-with `preview_url=NULL` and end up with broken product cards.
+Value-add: `status=completed` and a populated `preview_url` now arrive
+together — the platform reports `completed` only once the mockups are
+published to our CDN — so this normally returns as soon as the job
+completes. Waiting for `preview_url` as well is kept as a cheap safety
+net: it costs nothing when both land together, and it still protects a
+caller against a job left half-published by an older run.
 
-This script encodes the two-phase state machine + transient HTTP retry
+Polls are fast and stay fast however many mockups the job renders, and
+the job now finishes even if you stop polling it.
+
+(Historical: publishing used to happen ON the poll, so `preview_url`
+could lag `completed` by 20+ minutes — nothing advanced until somebody
+polled again. That gap is gone.)
+
+This script encodes the poll + transient HTTP retry
 semantics so callers don't have to. It is NOT a prompt-suppression
 wrapper; your runtime SHOULD prompt when it expands $APPARELHUB_API_KEY
 the first time. Approve in context.

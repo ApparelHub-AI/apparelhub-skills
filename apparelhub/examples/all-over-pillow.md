@@ -117,7 +117,7 @@ For lumbar (20×12) or 22×22, swap the variant ID AND the area dimensions to ma
 
 ## Phase 3.5 — Poll + verify
 
-One call handles BOTH completion phases (provider render + S3 ingestion):
+One call waits for the job to report `completed`:
 
 ```bash
 ah_poll_mockup <printful_provider_uuid> <job_uuid>

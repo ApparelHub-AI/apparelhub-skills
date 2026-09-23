@@ -140,14 +140,14 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/merchandise/product/previe
 
 Response includes `job_uuid`. Capture it.
 
-Wait for the job to finish AND for `preview_url` ingestion in ONE call via the packaged script:
+Wait for the job to finish via the packaged script:
 
 ```bash
 # Substitute literal job UUID. Default polls every 8s, 30-minute timeout.
 ah_poll_mockup <printful_provider_uuid> <job_uuid>
 ```
 
-The script handles BOTH completion phases (provider render finish + our S3 ingestion catching up) and writes the final response to `/tmp/preview_job.json`. Do NOT write an inline `for` loop with `$(...)` substitution — that trips the expansion check on every iteration.
+The script returns once the job reports `completed` (which now means the mockups are published) and writes the final response to `/tmp/preview_job.json`. Do NOT write an inline `for` loop with `$(...)` substitution — that trips the expansion check on every iteration.
 
 ---
 

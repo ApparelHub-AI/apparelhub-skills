@@ -137,23 +137,42 @@ For HTTP-only agents that cannot do filesystem multipart: the endpoint also acce
 same data uses **different names** (`provider_uuid` and `product_ref_id`).
 Don't copy field names between phases.
 
-**Polling — two-phase completion**:
+**Polling**:
 
-A mockup job has TWO completion gates:
+`status == "completed"` means the mockups are **published**, not merely
+rendered: every preview that landed carries a `preview_url` on our CDN by
+the time you see that status. While the provider has finished rendering
+but publishing is still catching up, the status stays `pending`.
 
-1. `status == "completed"` — Printful's mockup generator finished.
-2. At least one entry in `previews[]` has a non-null `preview_url`
-   (means we've downloaded the mockup from Printful and mirrored it to
-   our S3).
+So the rule is the simple one: **poll until `completed`, `failed` or
+`expired`.** Checking `preview_url` as well is still correct and costs
+nothing, and the packaged `ah_poll_mockup` does it — but it is now a
+belt-and-braces check rather than a second gate you have to wait out.
 
-The gap between these can be 20+ minutes. Don't stop polling at
-`status == "completed"` alone. Keep polling the SAME job endpoint until
-at least one `preview_url` is populated.
+Two consequences worth knowing:
 
-Reasonable polling parameters: 8-second interval, 30-minute total
-budget. The job endpoint occasionally returns transient HTTP 502/503/504/429
-(API Gateway timeouts during S3 ingestion or upstream slowness) — these
-are normal during long polls; retry up to ~5 consecutive transient errors.
+- **Each poll is fast** and stays fast no matter how many mockups the job
+  renders. Publishing runs on a background worker, not on your request, so
+  a 12-mockup job polls no slower than a 2-mockup one.
+- **Abandoning the poll no longer costs you the mockups.** Publishing used
+  to happen *on* the poll, so a run that stopped polling left its mockups
+  unpublished forever. It now finishes on its own.
+
+A `completed` job can still be a **partial** set: if some camera angles
+failed to download, the job completes with the ones that succeeded and
+`failure_reason` says which are missing. Four usable mockups beat
+withholding everything, so treat `completed` as "this is what you get",
+not "all six arrived".
+
+Reasonable polling parameters: 8-second interval, 30-minute total budget.
+The budget is a cap, not an expectation — most jobs finish in well under a
+minute. Transient HTTP 502/503/504/429 from the job endpoint are worth
+retrying (~5 consecutive) rather than treating as failure.
+
+> Older notes describe a "two-phase completion gate" with a gap of 20+
+> minutes between `completed` and a populated `preview_url`. That gap came
+> from publishing happening on the poll itself: nothing advanced until
+> somebody polled again. It no longer applies.
 
 ### Product creation
 
