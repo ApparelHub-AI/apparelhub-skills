@@ -144,7 +144,7 @@ Capture `job_uuid`.
 
 ## Phase 3.5 — Poll + verify
 
-One call handles BOTH completion phases (provider render + S3 ingestion):
+One call waits for the job to report `completed`:
 
 ```bash
 ah_poll_mockup <printful_provider_uuid> <job_uuid>

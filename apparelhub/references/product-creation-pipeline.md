@@ -297,9 +297,13 @@ Returns a `job_uuid`. Mockup generation is **async**. Use the packaged `ah_poll_
 ah_poll_mockup <provider_uuid> <job_uuid>
 ```
 
-The script polls `GET /merchandise/product/preview/<provider_uuid>/job/<job_uuid>` every 8 seconds until the job is `completed` AND at least one preview row has a populated `preview_url` (handles BOTH completion phases — provider render finish AND our S3 ingestion catching up — in one call). It prints a one-line status per poll and saves the final response to `/tmp/preview_job.json`.
+The script polls `GET /merchandise/product/preview/<provider_uuid>/job/<job_uuid>` every 8 seconds until the job is `completed` AND at least one preview row has a populated `preview_url`. It prints a one-line status per poll and saves the final response to `/tmp/preview_job.json`.
 
-Default timeout is 30 minutes. Useful flags:
+Those two conditions now arrive together — `completed` means the mockups are published — so the script normally returns as soon as the job completes. Checking both is kept as a cheap safety net, not because you have to wait out a second phase.
+
+Each poll is fast regardless of how many mockups the job renders: publishing happens on a background worker, not on your request. And if you stop polling, the job still finishes and its previews still land, which was not true before.
+
+Default timeout is 30 minutes — a cap, not an expectation; most jobs finish in well under a minute. Useful flags:
 - `--timeout 600` — shorter cap if you want to fail fast
 - `--interval 5` — poll more aggressively
 - `--out /tmp/some_other_path.json` — write to a non-default path

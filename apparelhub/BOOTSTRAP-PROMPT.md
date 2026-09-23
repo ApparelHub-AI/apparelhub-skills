@@ -85,9 +85,9 @@ https://api.apparelhub.ai/agents/v1/
    generated_image_uuid, provider_product_ref_id, templates, variant_ids}` to
    start a mockup job.
 4. Poll `GET /merchandise/product/preview/{provider_uuid}/job/{job_uuid}` until
-   `status=completed` AND the per-preview `preview_url` (our S3) is populated.
-   This is a two-phase wait: `completed` alone is not enough, and preview_url
-   ingestion takes up to ~20 min after the job completes.
+   `status=completed` (or `failed` / `expired`). `completed` means the mockups
+   are published, so each preview carries a `preview_url` on our CDN by then.
+   Polls are fast and stay fast however many mockups the job renders.
 5. **Manually verify the mockup** (download and look at it). Do NOT proceed
    to product creation if the mockup is blank, distorted, has visible
    chroma-key artifacts, or doesn't show the design clearly.
