@@ -408,6 +408,6 @@ Standard shipping: $8.00 to customer, free over $70.
 
 ## 9. Default to DRAFT when syncing to sales channels
 
-For channels that support draft state (Etsy, Shopify), push as draft first. The merchant reviews on the channel's admin before customers see it. Only push as `active` when the user EXPLICITLY says "make it live."
+For channels that support draft state (e.g. Shopify), push as draft first. The merchant reviews on the channel's admin before customers see it. Only push as `active` when the user EXPLICITLY says "make it live."
 
 The cost of a too-eager publish (typo'd description in front of real customers) is much higher than one extra step.

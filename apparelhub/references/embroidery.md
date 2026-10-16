@@ -271,7 +271,7 @@ Standard apparel embroidery render: 1200×1200 px @ 300dpi. Always preview the m
 - **Digitization is a separate, post-order step** — up to **36 hours**, manual. The order can't go to production until it completes. Factor this into fulfillment-time expectations.
 - **Manual process → re-uploading a visually-similar design can stitch differently** (different specialist, different stitch direction). Don't assume two near-identical uploads look identical stitched.
 - **Embroidery Ready Fonts (pre-digitized):** TEXT designs built with Printify's built-in text editor / pre-digitized fonts **skip the 36h digitization** and go straight to production. Uploaded images, logos, or curved text STILL require digitization. Printify-exclusive — use it for monogram/name products to cut fulfillment time and avoid digitization-failure cancellations.
-- **Personalized embroidery** (customer-supplied text): Automated Personalization on Etsy / Pop-Up Store / TikTok Shop (auto-paused for merchant review); Manual Personalization on other channels (edit + approve each order). Text-only today; no image uploads.
+- **Personalized embroidery** (customer-supplied text): Automated Personalization on Etsy / Pop-Up Store / TikTok Shop (these are Printify's own channel integrations; ApparelHub does not integrate Etsy) (auto-paused for merchant review); Manual Personalization on other channels (edit + approve each order). Text-only today; no image uploads.
 
 ## P8. Always order a sample
 

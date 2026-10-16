@@ -36,17 +36,17 @@ This is the rule that prevents you from giving merchants wrong answers about who
 
 ### The rule
 
-**The sales channel is the AUTHORITATIVE source of payment status for any order that originated from a storefront** (Shopify, WooCommerce, Wix, Etsy, future channels). ApparelHub MIRRORS the storefront's payment state — it does NOT independently process card charges for these orders.
+**The sales channel is the AUTHORITATIVE source of payment status for any order that originated from a storefront** (Shopify, WooCommerce, Wix, TikTok Shop, future channels). ApparelHub MIRRORS the storefront's payment state — it does NOT independently process card charges for these orders.
 
 | Order origin | `payment_method` | Who charged the card | What does `payment_status` mean? |
 |---|---|---|---|
-| Storefront order (Shopify, WC, Wix, Etsy) | `sales_channel` | The storefront's own payment gateway | Mirror of the storefront's payment state. We didn't touch the money. |
+| Storefront order (Shopify, WC, Wix, TikTok Shop) | `sales_channel` | The storefront's own payment gateway | Mirror of the storefront's payment state. We didn't touch the money. |
 | Manual ApparelHub order with "Pay with credit card" via Stripe Connect | `stripe` | ApparelHub via Stripe Connect | We actually processed the charge. `stripe_payment_intent_id` and `stripe_charge_id` are populated. |
 | Manual order, no payment | `manual` | Nobody (yet) | Awaiting payment. May be linked later via `link-stripe-payment` (off-platform sale) OR via `link-ecommerce-order` (if it gets matched to a storefront order). |
 
 ### Why this matters
 
-If a merchant asks "did I receive payment for order #155733798?", and that order's `payment_method=sales_channel`, the answer is "yes, the customer paid via [Shopify/WC/Wix/Etsy]'s payment gateway. The funds settle in your sales-channel account on their normal schedule."
+If a merchant asks "did I receive payment for order #155733798?", and that order's `payment_method=sales_channel`, the answer is "yes, the customer paid via [Shopify/WC/Wix/TikTok Shop]'s payment gateway. The funds settle in your sales-channel account on their normal schedule."
 
 DO NOT say "ApparelHub received the payment" — we didn't. DO NOT look for a Stripe charge ID on a `sales_channel` order — there isn't one.
 

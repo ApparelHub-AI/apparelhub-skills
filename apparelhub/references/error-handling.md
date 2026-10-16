@@ -27,7 +27,7 @@ How to interpret API errors and the most common silent-failure modes.
 Sales channel integration is locked (admin lock OR per-merchant lock). Mutating operations (sync, order auto-submit, fulfillment notify) are blocked.
 
 **What to tell the user:**
-> "Your [Shopify/WC/Wix/Etsy] integration is locked. Unlock it in the store dashboard at `https://apparelhub.ai/stores/<store_uuid>` to allow sync."
+> "Your [Shopify/WC/Wix/TikTok Shop] integration is locked. Unlock it in the store dashboard at `https://apparelhub.ai/stores/<store_uuid>` to allow sync."
 
 If they don't know why it's locked, the audit log has the answer:
 ```bash
@@ -46,7 +46,7 @@ The shop URL is already connected to a DIFFERENT user's account in the same envi
 Returned by `link-stripe-payment` when called on an order whose `ecommerce_external_id` is set. The storefront already processed the payment; we can't double-attribute by recording a Stripe charge.
 
 **What to tell the user:**
-> "This order was paid through [Shopify/WC/Wix/Etsy]'s payment gateway, not through ApparelHub's Stripe Connect. Payment is already recorded — no additional action needed."
+> "This order was paid through [Shopify/WC/Wix/TikTok Shop]'s payment gateway, not through ApparelHub's Stripe Connect. Payment is already recorded — no additional action needed."
 
 (This is Absolute Rule 10 in action — see `references/orders-and-fulfillment.md` for the full payment-authority discussion.)
 
@@ -635,7 +635,7 @@ Symptom: `ship_product` / `add_variants` fails with `bad_request: No variants co
 
 ### Fulfillment sync wasn't run before ecommerce sync (Phase 7 ordering)
 
-Ecommerce sync (Shopify/Etsy/etc.) needs the fulfillment SKU to attach. If you try `target=ecommerce` before `target=merchandise`, the ecommerce sync may succeed cosmetically but the product won't have a manufacturing path.
+Ecommerce sync (Shopify/WooCommerce/etc.) needs the fulfillment SKU to attach. If you try `target=ecommerce` before `target=merchandise`, the ecommerce sync may succeed cosmetically but the product won't have a manufacturing path.
 
 **Fix**: ALWAYS run `?target=merchandise` first. Wait for it to return success. Then run `?target=ecommerce`.
 
