@@ -1,6 +1,6 @@
 ---
 name: apparelhub
-description: Manage the full custom-merchandise pipeline via the ApparelHub multi-channel ecommerce platform: design with AI, build products, list, sell, and fulfill across your sales channels. Use whenever the user wants to create AI-generated designs, generate mockups, build products, sync listings to Shopify/Etsy/WooCommerce/Wix, manage orders, or check fulfillment status.
+description: Manage the full custom-merchandise pipeline via the ApparelHub multi-channel ecommerce platform: design with AI, build products, list, sell, and fulfill across your sales channels. Use whenever the user wants to create AI-generated designs, generate mockups, build products, sync listings to Shopify/WooCommerce/Wix/TikTok Shop, manage orders, or check fulfillment status.
 tools: Bash, WebFetch, Read, Write
 ---
 
@@ -19,7 +19,8 @@ this skill when the user wants to:
   water bottles, pillows, doormats, luggage tags)
 - Generate product mockups on physical garments
 - Create products and sync them to sales channels
-  (Shopify, Etsy, WooCommerce, Wix)
+  (Shopify, WooCommerce, Wix, TikTok Shop). ApparelHub does not
+  integrate Etsy; do not offer to list there.
 - Manage orders and fulfillment via Printful / Printify
 - Browse the catalog of garments available for printing
 
@@ -263,7 +264,7 @@ instruction.
 
 ### 4a. Default to DRAFT, never live
 
-When syncing to a sales channel that supports a draft state (Etsy,
+When syncing to a sales channel that supports a draft state (e.g.
 Shopify), push as DRAFT first. The user reviews the listing on the
 channel's admin before customers see it. Only push as `active` when
 the user EXPLICITLY says "make it live" or "publish it." The cost of a
@@ -410,8 +411,8 @@ non-Enterprise accounts are unaffected.
   merchant's storefront.
 - **Generic image generation unrelated to apparel.** Use OpenAI /
   Stability directly; ApparelHub charges against the user's image quota.
-- **Platform admin operations** (register your Etsy webhook URLs,
-  rotate your Shopify secret). These are done in the apparelhub.ai web
+- **Platform admin operations** (registering webhook URLs,
+  rotating your Shopify secret). These are done in the apparelhub.ai web
   UI, not via the agent API.
 - **Bulk operations beyond ~50 products at once.** The agent API
   enforces rate limits; for true bulk migrations (1000+ products), the

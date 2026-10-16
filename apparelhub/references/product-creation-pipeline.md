@@ -517,7 +517,7 @@ This creates the product on the fulfillment provider's side (Printful/Printify) 
 
 ## Phase 8 — (OPT-IN) Sync to a sales channel — ONLY when the user asks to list/publish on a storefront
 
-**Do NOT do this step unless the user EXPLICITLY asked to list, publish, or sell the product on a storefront (Shopify, WooCommerce, Wix, Etsy).** "Map to the store" / "add to the store" / "store availability" do NOT mean this — they mean Phases 6–7. Pushing to a sales channel when the user only asked to map to the store is over-reach (it happened in an automated task and created unwanted WooCommerce drafts).
+**Do NOT do this step unless the user EXPLICITLY asked to list, publish, or sell the product on a storefront (Shopify, WooCommerce, Wix, TikTok Shop).** "Map to the store" / "add to the store" / "store availability" do NOT mean this — they mean Phases 6–7. Pushing to a sales channel when the user only asked to map to the store is over-reach (it happened in an automated task and created unwanted WooCommerce drafts).
 
 If (and only if) they asked to list it on a storefront:
 
@@ -529,7 +529,7 @@ Fulfillment (Phase 7) MUST have succeeded first — the storefront listing attac
 
 ### Default to DRAFT, not live
 
-For channels that support a draft state (Etsy, Shopify), prefer pushing as a draft first. Tell the merchant:
+For channels that support a draft state (e.g. Shopify), prefer pushing as a draft first. Tell the merchant:
 > "I've synced as drafts so you can review on your storefront before going live. To publish, flip the listing in your channel admin or re-run sync with `?listing_state=active`."
 
 Only push as `active` if the user EXPLICITLY says "make it live" or "publish it." The cost of a too-eager publish (typo'd description in front of real customers) is much higher than the cost of one extra step.

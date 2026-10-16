@@ -334,7 +334,7 @@ caps: `references/product-imagery.md`.
 | `DELETE` | `/agents/v1/store/{uuid}/products/{product_uuid}/sync?target=ecommerce&integration_uuid=<integration_uuid>` | Unsync from sales channel. |
 | `GET` | `/agents/v1/store/{uuid}/audit-log` | Compliance trail. Supports `?action=...` filtering. |
 
-**Default sales-channel sync to DRAFT** when supported (Etsy, Shopify).
+**Default sales-channel sync to DRAFT** when supported (e.g. Shopify).
 Push as `?listing_state=draft` (or omit — draft is the default). Only
 push as `active` when the user explicitly says "make it live."
 
