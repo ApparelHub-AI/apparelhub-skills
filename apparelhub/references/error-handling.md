@@ -714,3 +714,18 @@ Tell the user to contact ApparelHub support at `support@apparelhub.ai` when:
 - A sync succeeded according to the API but the product genuinely doesn't appear on the storefront after >15 minutes (verify on the channel admin, not just the public storefront)
 
 Don't escalate for things you can fix: wrong field names, missing variants, draft/live state, locked integrations the merchant can unlock themselves.
+
+## Fulfillment price sync deferred by a provider rate limit (202 `deferred: true`)
+
+When you change prices across many products quickly, the fulfillment provider (Printful) can rate-limit the account for about a minute. The platform no longer fails those syncs. `POST /store/{store}/products/{product}/sync?target=merchandise` answers **202** with:
+
+```json
+{"error_code": "provider_rate_limited", "deferred": true, "retry_after": 57,
+ "sync_status": "Pending", "message": "..."}
+```
+
+and finishes the update automatically once the window clears. The store association reads `Pending` meanwhile, then `Synced`, or `Failed` with a reason if the provider keeps refusing. Product and variant edits that trigger the same push stay 200 and list the affected stores in `fulfillment_deferred` (with a `Retry-After` header).
+
+- **Do NOT retry the sync immediately.** That only hits the limit again.
+- **Pace bulk loops**: when you see a deferral, pause at least `retry_after` seconds before the next product's price change on the same provider account.
+- Check the product's sync status later rather than assuming it landed. The MCP `sync_to_fulfillment` tool reports this as `fulfillment_status: "pending"`.

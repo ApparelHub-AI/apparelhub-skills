@@ -93,6 +93,13 @@ The mockup poll (`GET /merchandise/product/preview/{provider}/job/{job}`) and th
 
 `ship_product` and `create_product` carry it through as a warning, so an unattended run sees it **before** the product is created. Fix it with `process_transparency` (or `POST /images/generated/{uuid}/remove-background`, which costs no generation quota), then **render the mockup again** — the previews you are holding were rendered from the old design.
 
+**Read what background removal actually did; never assume it worked.**
+
+- `POST /images/generated/{uuid}/remove-background` removes only background **connected to the image edge**. Colour that is enclosed by artwork (a mustard sun inside a badge on a lime screen) is left alone and counted in `background.enclosed_kept_px`. Letter holes are still cleared for a true `#00FF00` green screen. The response's `background.background_state` is **measured from the result**: act on it, and if it is not `transparent`, inspect the design before using it.
+- `process_transparency` fails with **`transparency_not_applied`** when the keyed result is still opaque (typical cause: the generator returned a non-green background such as yellow-lime, which green-dominance keying cannot see). Nothing was uploaded and the original design is unchanged. Regenerate on pure `#00FF00`, or upload an already-transparent file. A partial key returns `transparency_clean: false` plus a `warning`: inspect it (`verify_design_quality`) before it goes on a product.
+
+A design created before this check existed may show no `design_check` on the first poll: its verdict is computed in the background and appears on a later poll. Absent still means "nothing known", never "clean".
+
 **It is gated to PLACED prints only.** A full-bleed / all-over design is supposed to be opaque edge to edge, so it is never flagged, and you must not "fix" one. Check `print_style` before acting on anything you infer yourself.
 
 Designs are reported as one of four `background_state` values: `transparent` (ready), `opaque_box` (will print as a rectangle), `opaque_varied` (opaque but a photograph, with no flat border to remove, so removing a background is the WRONG move), and `unknown` (not inspected; say nothing).
