@@ -347,6 +347,82 @@ against an older platform build, verify rather than assume.
 
 ---
 
+## 5e. Brand briefs and collections: one design, or a whole set from one generation
+
+Sometimes the user does not describe a design. They describe a **brand**: a name, a tagline, a mood, a list of products ("a tee, a hoodie, a cap and a tote"), sometimes with headings. Handing that to an ordinary single-image request goes wrong in one of two ways: most of the brief is thrown away, or the model answers with product photography of the garments instead of flat artwork you can print (see §1). The platform has two tools for this, and you pick between them.
+
+### Step 1: notice it is a brief (the platform tells you)
+
+On every text-to-image call, `POST /agents/v1/images/generate` (and the generation-free `POST /agents/v1/images/prompt-improve`) may return an advisory `prompt_improvement` block. When its `issues` array contains **`brand_brief`**, the prompt describes a whole brand, collection or storefront rather than one design. All the other issue codes describe the kind of picture asked for; this one describes its **scope**.
+
+For a brief, `improved_prompt` is **the single strongest design extracted from it**, built only from the brief's own motifs and wording. It is not a rewrite of the whole brief. The advice is never applied for you and never blocks the generation.
+
+```bash
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/prompt-improve" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"prompt": "Brand: Northwind Trail Co. Rugged outdoor apparel for long distance hikers. Collection: a compass rose tee, a topographic map hoodie, a mountain cap and a pine tree tote. Tagline: Go Further."}'
+# -> "prompt_improvement": {"issues": ["brand_brief", ...],
+#      "improved_prompt": "a stylised compass rose, rugged outdoor style, flat 2D vector graphic, solid ... background",
+#      "suggestion_id": "<suggestion_uuid>", ...}
+```
+
+`prompt-improve` costs no generation, so it is the cheap way to ask before you spend one.
+
+### Step 2: choose, and tell the user which you chose
+
+| Option | When | Request |
+|---|---|---|
+| **One design** | The user wants a product now, or the brief has one obvious hero idea | Generate `improved_prompt` as an ordinary design. Drive the rest of the brief through the pipeline later as separate designs and products. |
+| **A collection** | The user wants to see the brand's range, or asked for several products at once | Keep the brief as the `prompt` and add **`"concepts": 4`** (4 is a good default; the platform UI asks for 4). |
+
+### The `concepts` contract
+
+- **Only some sources can do it.** `GET /agents/v1/images/sources` reports **`supports_collection`** per source. Today that is **`Nano Banana` only**. On any source where it is `false`, `concepts` is **silently reduced to 1**: you get one ordinary design and no error. Asking for seven and getting one on such a source is the contract working, not a failure.
+- **Capped.** At most **7** (the primary design plus up to 6 more). Ask for more and you get the cap. The model may also return fewer than you asked for.
+- **One generation credit.** It is one model call, so it counts as ONE image generation against the quota however many designs come back. The extras cost nothing.
+- **The response still describes ONE design.** Nano Banana is slow, so expect `202` with an `image_uuid` and poll `GET /agents/v1/images/upload/<image_uuid>/status` to `completed` as usual (§5b). The other designs are saved separately in the same workspace.
+- **Tell the platform it is a brief.** Leave `prompt_improvement` at its default (`advisory`) on the generate call, or, if you already consulted `prompt-improve` and send `"prompt_improvement": "skip"`, pass that suggestion's `suggestion_id` as `prompt_improvement_id`. Either way the platform knows the prompt is a brief and constrains the model to flat artwork. Sending a brief with `skip` and no id removes that constraint, which is how a brief comes back as photographs of garments.
+
+```bash
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"prompt": "<the brand brief, unchanged>", "source": "Nano Banana", "size": "1024x1024", "concepts": 4}'
+# -> 202 {"image_uuid": "<design_uuid>", "processing_status": "pending", ...}  then poll to completed
+```
+
+### Step 3: read the rest of the set
+
+```bash
+curl -sS "https://api.apparelhub.ai/agents/v1/images/generated/<design_uuid>/collection" \
+  -H "x-api-key: $APPARELHUB_API_KEY"
+# -> {"collection": [{"uuid": "...", "url": "...", "thumbnail_url": "...",
+#                     "title": "...", "concept_description": "...",
+#                     "background_state": "opaque_varied"}, ...]}
+```
+
+- Returns the **other** designs from the same generation, oldest first. The design you asked about is never included, so "and N more from this brief" needs no filtering.
+- **Read it after the primary reaches `completed`.** The siblings are written by the same background job just after the primary is marked complete, so a read made the instant the poll finishes can be short. If it is empty or short right then, wait a few seconds and read once more before concluding the model made fewer.
+- An ordinary design returns `{"collection": []}`. That is the honest answer, not an error, and this endpoint does not fail: an unknown or inaccessible uuid also comes back as an empty list, so an empty list does not prove the design exists. Read-only and not metered.
+- **`title` and `concept_description` are the product name and retail description the model wrote** for that concept. Use them as the starting product name and description so the merchant does not retype copy the model already produced. Either may be `null`, and some titles carry a "Concept 2:" style prefix worth tidying. **Never invent one** when it is null; write it with the user or generate it deliberately.
+- The single-design read `GET /agents/v1/images/generated/<uuid>` also carries `concept_description` (not the designs LIST).
+
+### ⛔ Check `background_state` on every sibling before building from it
+
+Asked for a set, the model often answers with **pictures of finished garments** rather than flat art. Build a product from one of those and a picture of a hoodie gets printed onto a tee.
+
+| `background_state` | Meaning | What to do |
+|---|---|---|
+| `transparent` | Ready to place | Build normally |
+| `opaque_box` | A solid background that can be keyed automatically | Key it (§3, §3b), then build |
+| `opaque_varied` | The background cannot be separated, so it **will print with its background** | Do NOT build a product from it without telling the user. Look at it (§4, §7). |
+| `unknown` / `null` | Not measured | Look at it before building |
+
+⛔ **Do not tell the user an `opaque_varied` design "is a photograph".** The field measures whether the background can be lifted off, not what the picture is: a legitimate engraving drawn on textured paper reports `opaque_varied` too. What is true of both, and worth saying before they build, is that **it will print with its background as it is.** If they want flat art from a concept they like, regenerate that one concept on its own (its `concept_description` is a good prompt) or edit it (§5b).
+
+**MCP callers:** `generate_image` takes `concepts`, returns the `prompt_improvement` block, and warns when the source (including one the fallback ladder moved to) cannot answer with a set; `get_design_collection(design_uuid)` reads the siblings and warns about any that will print with their background. MCP server 0.16.0 or later.
+
+---
+
 ## 6. Color discipline — max 4 colors per design
 
 More than 4 color variants per design creates SKU sprawl that hurts conversion. Pick the 4 best colors for the design and stop.
