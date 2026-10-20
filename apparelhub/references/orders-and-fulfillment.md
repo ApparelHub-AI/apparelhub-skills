@@ -113,6 +113,19 @@ Check `payment_status`. If `paid`, AND `payment_method=sales_channel`, the store
 
 Iterate `shipments[]`. Give the merchant tracking numbers + carrier + URLs for each shipment. If `fulfillment_status` is `in_production`, tell them no shipments have left yet — production is in progress.
 
+### ⚠️ `needs_attention`: the order will NOT complete on its own
+
+Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_attention`. It's `null` when nothing needs the merchant. Otherwise it's `{kind, severity, title, message}` and **you must tell the user**, quoting `message`:
+
+| `kind` | What happened | What to suggest |
+|---|---|---|
+| `provider_failed` | The fulfillment provider rejected the order (billing, address, print files). It shows as cancelled, but it's fixable. | Fix the cause the message names (for example, add a payment method in the provider account), then resubmit. |
+| `provider_cancelled` | The provider cancelled the order. The buyer paid and nothing will ship. | Find out why with the provider; refund or recreate the order. |
+| `cancel_not_stopped` | The buyer cancelled on the sales channel, but production had already started, so it will still ship. | Contact the provider to try to stop it, and handle the refund on the channel. |
+| `not_submitted` | Paid, but never sent to the provider (often the channel hasn't released the shipping address yet). Retried hourly. | Wait, or push it with `submit-fulfillment` once the address exists. |
+
+An ordinary `cancelled` with `needs_attention: null` is a cancellation the merchant or buyer made and that was honoured. Nothing to do. ApparelHub also alerts the merchant in-app and by email for each of these, so you can say "you should also have an email about this." MCP: `list_my_orders` and `get_order_details` return the same field.
+
 ### "Why hasn't this order shipped?"
 
 Check `fulfillment_status` and the order's audit trail. Common causes:
