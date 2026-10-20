@@ -120,6 +120,7 @@ Check `fulfillment_status` and the order's audit trail. Common causes:
 - `requires_approval=true` (held by `hold_orders_above_amount`) — merchant has to approve manually
 - Provider has a SKU mapping issue (look in audit log for `auto_submit_sku_unmapped`)
 - Provider rejected the submission (look in audit log for `provider_submit_failed`)
+- **The order is paid and approved but was never sent to the provider** (`fulfillment_status` is `pending`/`approved`, no provider order id). Usually the sales channel had not released the buyer's shipping address yet: TikTok Shop withholds it for a while after an order is placed. Look on the timeline for `awaiting_recipient_address` or `submit_failure_alerted` (`kind: address_pending`). ApparelHub retries these automatically every hour and alerts the merchant in-app and by email; to push one through now, `POST /orders/<uuid>/submit-fulfillment` (an empty body is fine). See "Approve can succeed while the submit fails" below.
 
 ### "Was this order successfully submitted to Printful?"
 
@@ -221,6 +222,22 @@ round-trip: `hold_reason`, `total_price`, `cost_total`, `profit_margin`,
 ```bash
 # Release the hold and send the order onward (the ApparelHub-side approval)
 curl -sS -X POST ".../agents/v1/orders/<uuid>/approve" -H "x-api-key: $APPARELHUB_API_KEY"
+
+# ⚠️ Approve can succeed while the submit fails. For a sales-channel order the
+# approve ALSO submits to the provider, and it returns 200 either way. Always
+# read the result:
+#   "auto_submitted": false  -> approved, but NOT in production
+#   "submit_error": "..."     -> why
+#   "submit_error_kind": "address_pending" -> the channel has not released the
+#        shipping address yet; ApparelHub retries hourly and alerts the merchant.
+#        Tell the user, then re-check later (or submit-fulfillment, below).
+#   "submit_error_kind": "other" -> needs a fix first. Tell the user the reason.
+# Never report "approved, it's on its way" without checking auto_submitted.
+
+# Push a paid order that never reached its provider (empty body = use the
+# stored/channel shipping address)
+curl -sS -X POST ".../agents/v1/orders/<uuid>/submit-fulfillment" -H "x-api-key: $APPARELHUB_API_KEY" \
+  -H 'Content-Type: application/json' -d '{}'
 
 # Flip an existing draft to production (when the order is already a draft)
 curl -sS -X POST ".../agents/v1/orders/<uuid>/confirm" -H "x-api-key: $APPARELHUB_API_KEY"
