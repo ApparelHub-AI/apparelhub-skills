@@ -241,6 +241,7 @@ reference up front saves you from shipping a broken product.
 | **A delivered item arrived wrong** (doesn't match the mockup, damaged, wrong or missing item, bad print) — reporting it, bridging the claim to Printful/Printify, replacement orders | `references/fulfillment-issues.md` covers the `/agents/v1/orders/.../issues` endpoints, the 30-day report window, eligibility warnings (change-of-mind is not claimable), evidence upload caps, the provider-ready summary + dashboard deep-link handoff, and zero-charge replacement orders |
 | **Enterprise / agency account** (multiple workspaces; a list looks like it's "missing" stores/products/designs, or you need to target a specific client workspace) | `references/workspaces.md` covers the `GET /agents/v1/workspaces` discovery route, the `?workspace=` param, the `workspaces` visibility field, 403/404 handling, and workspace-scoped keys |
 | **Analytics / reporting** — sales KPIs, trends, top sellers, channel mix, margins, ops health, CSV export, or an agency's per-client portfolio | `references/analytics.md` covers the six read-only `/agents/v1/analytics/*` endpoints, the `advanced_analytics` tier gate (Professional+), currency segmentation, and the `margin_coverage` caveat |
+| **The merchant already sells on a channel** ("what's in my shop?", "bring my existing products in", an established seller who wants to see or manage their current catalog) | `references/catalog-import.md`. Check `capabilities.catalog_read` on the integration (`GET /store/<uuid>` → `active_integrations`; WooCommerce and TikTok Shop today), start `POST /store/<uuid>/ecommerce/integration/<integration_uuid>/catalog/import`, poll the run every few seconds until `completed`/`failed`, then read `GET /store/<uuid>/catalog?scope=external`. ⛔ Tell the merchant FIRST that it changes nothing on their store and those products stay fulfilled as today. Tracked listings are NOT ApparelHub products: no sync, price cascade or fulfilment. On `409 import_in_progress`, poll the returned `run`; never start another. |
 | **Channel performance** — which listings people SEE but do not buy, why a listing is underperforming, what is safe to archive, or whether a channel reports views at all | `references/channel-performance.md` covers the `/agents/v1/analytics/channel/*` endpoints, the shop-level verdict to read *before* any listing state, the seven listing states and the fix each implies, the rule that a missing metric is never a zero, and `/agents/v1/analytics/interventions` — whether the last change you made actually worked |
 
 When the user asks for an end-to-end flow ("build me a saguaro tee and
@@ -362,6 +363,10 @@ and each variant has both `price` (retail) and `cost` (provider production
 cost, resolved when the variant is created). That's the place to read cost
 for margin pricing — product-detail (`GET /product/<uuid>`) omits variants.
 See `references/pricing.md`.
+
+Products the merchant sells on a channel that ApparelHub did NOT make are not
+in any of the lists above. To see them, import the channel's catalog as
+read-only tracked listings: `references/catalog-import.md`.
 
 On an **Enterprise (agency) account**, every list/get above is scoped to one
 **active workspace** (the Default workspace unless you pass `?workspace=<uuid>`).
