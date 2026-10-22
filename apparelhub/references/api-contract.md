@@ -333,6 +333,9 @@ caps: `references/product-imagery.md`.
 | `DELETE` | `/agents/v1/store/{uuid}/products/{product_uuid}/sync?target=merchandise` | Unsync from fulfillment. |
 | `DELETE` | `/agents/v1/store/{uuid}/products/{product_uuid}/sync?target=ecommerce&integration_uuid=<integration_uuid>` | Unsync from sales channel. |
 | `GET` | `/agents/v1/store/{uuid}/audit-log` | Compliance trail. Supports `?action=...` filtering. |
+| `POST` | `/agents/v1/store/{uuid}/ecommerce/integration/{integration_uuid}/catalog/import` | Start a catalog import: bring the merchant's EXISTING channel listings in as read-only tracked listings. `202` with the `run` to poll. See `references/catalog-import.md`. |
+| `GET` | `/agents/v1/store/{uuid}/catalog/runs/{run_uuid}` | Catalog-import run status + counts. |
+| `GET` | `/agents/v1/store/{uuid}/catalog` | Tracked listings (`scope=all\|external\|ours`, `integration`, `include_removed`, `limit`, `offset`) plus each channel's `catalog_read` and `last_run`. |
 
 **Default sales-channel sync to DRAFT** when supported (e.g. Shopify).
 Push as `?listing_state=draft` (or omit — draft is the default). Only
