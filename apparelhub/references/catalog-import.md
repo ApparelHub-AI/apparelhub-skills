@@ -24,7 +24,10 @@ listings**, so you can see and reason about their whole catalog.
 Images are the channel's own URLs, referenced rather than copied.
 
 **Fulfilment is untouched.** Orders for the merchant's own products keep going
-wherever they go today. ApparelHub never fulfils a tracked listing.
+wherever they go today. ApparelHub never fulfils a tracked listing. Once the
+catalog is imported, those orders are *recorded* in ApparelHub with
+`fulfilled_by: "merchant"`, so you can read every order from one place; see
+"Orders fulfilled by the merchant's store" in `orders-and-fulfillment.md`.
 
 ---
 

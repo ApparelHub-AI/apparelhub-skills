@@ -131,6 +131,30 @@ Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_at
 
 An ordinary `cancelled` with `needs_attention: null` is a cancellation the merchant or buyer made and that was honoured. Nothing to do. ApparelHub also alerts the merchant in-app and by email for each of these, so you can say "you should also have an email about this." MCP: `list_my_orders` and `get_order_details` return the same field.
 
+### Orders fulfilled by the merchant's store (`fulfilled_by: "merchant"`)
+
+After a merchant imports their channel catalog (`catalog-import.md`), an order for one of their
+own products, the ones not made in ApparelHub, is recorded with `fulfilled_by: "merchant"`. An
+ApparelHub-fulfilled order has `fulfilled_by: null`.
+
+- **Their store fulfils it.** ApparelHub never sends it to a fulfillment provider, so it has no
+  `fulfillment_provider_name` and never shows `needs_attention`.
+- **Don't try to act on it.** Approve, submit, confirm, cancel, hold, record payment and item
+  edits all return `409 {"error": "fulfilled_by_merchant"}`. That's expected, not a failure: tell
+  the merchant to ship, cancel or refund it in their store.
+- **Its status follows the channel.** `POST /orders/{uuid}/reconcile` pulls the store's own status
+  (shipped, delivered, cancelled) onto it.
+- **Filter:** `GET /orders?fulfilled_by=merchant` lists only these; `?fulfilled_by=apparelhub`
+  lists only the orders ApparelHub fulfils.
+- **Revenue is reported apart.** The orders dashboard summary carries a separate
+  `merchant_fulfilled` block, and analytics label them `merchant:<channel>` on the fulfillment
+  dimension. Their cost is outside ApparelHub, so they never count toward margin.
+- **Notifications are opt-in.** The store setting `notify_on_tracked_orders` (off by default)
+  decides whether the merchant is notified about them. They're recorded either way.
+
+MCP: `list_my_orders` and `get_order_details` return `fulfilled_by`, and `list_my_orders` takes
+the same filter.
+
 ### "Why hasn't this order shipped?"
 
 Check `fulfillment_status` and the order's audit trail. Common causes:
