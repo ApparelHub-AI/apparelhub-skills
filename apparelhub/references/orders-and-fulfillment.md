@@ -122,7 +122,12 @@ Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_at
 | `provider_failed` | The fulfillment provider rejected the order (billing, address, print files). It shows as cancelled, but it's fixable. | Fix the cause the message names (for example, add a payment method in the provider account), then resubmit. |
 | `provider_cancelled` | The provider cancelled the order. The buyer paid and nothing will ship. | Find out why with the provider; refund or recreate the order. |
 | `cancel_not_stopped` | The buyer cancelled on the sales channel, but production had already started, so it will still ship. | Contact the provider to try to stop it, and handle the refund on the channel. |
-| `not_submitted` | Paid, but never sent to the provider (often the channel hasn't released the shipping address yet). Retried hourly. | Wait, or push it with `submit-fulfillment` once the address exists. |
+| `not_submitted` | Paid, but never sent to the provider (often the channel hasn't released the shipping address yet). Retried hourly. If the channel's ship-by deadline is close or passed, the message says so and `severity` is `error`. | Wait, or push it with `submit-fulfillment` once the address exists. If the deadline is close, treat it as urgent. |
+| `ship_by_at_risk` | The sales channel's ship-by deadline (`ship_by_at`) is within a day and the order hasn't shipped. | Check what's holding it (provider status, holds) and get it moving now. |
+| `ship_by_missed` | The ship-by deadline passed and the order hasn't shipped. Late shipping updates can count against the merchant's shop. | Get it shipped as soon as possible, and suggest messaging the buyer that it's on the way. |
+| `channel_tracking_failed` | The order shipped, but the sales channel refused the tracking update, so the buyer can't see tracking there. Retried automatically. | Quote the channel's reason. The merchant can add the tracking number on the channel directly. |
+
+**`ship_by_at`** is the sales channel's ship-by deadline in UTC (set for TikTok Shop orders, `null` when the channel has none). When the merchant asks "is anything urgent?", sort open orders by it.
 
 An ordinary `cancelled` with `needs_attention: null` is a cancellation the merchant or buyer made and that was honoured. Nothing to do. ApparelHub also alerts the merchant in-app and by email for each of these, so you can say "you should also have an email about this." MCP: `list_my_orders` and `get_order_details` return the same field.
 
