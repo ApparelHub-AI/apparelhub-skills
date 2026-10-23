@@ -34,7 +34,7 @@ catalog is imported, those orders are *recorded* in ApparelHub with
 ## 2. Which channels
 
 Catalog import works where the channel reports **`catalog_read: true`**:
-**WooCommerce and TikTok Shop** today. Any other channel is refused with
+**Shopify, WooCommerce, Wix and TikTok Shop**. Any other channel is refused with
 `409 catalog_read_unsupported`; tell the merchant it is not available for that
 channel yet rather than retrying.
 
