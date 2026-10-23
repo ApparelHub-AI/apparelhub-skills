@@ -177,6 +177,37 @@ If `ORDER_CREATED` exists but `ORDER_CONFIRMED` doesn't, the order is stuck in d
 
 The two drifted — usually a missed webhook. Run a reconcile (section 11): it pulls the latest payment/cancellation from the channel and pushes the latest fulfillment/tracking to it, then tells you exactly what it changed.
 
+### "An order was placed on my Shopify store but ApparelHub never got it at all"
+
+Reconcile needs an order to reconcile. When the order is missing entirely, run a
+sync, which asks the connected Shopify shop for recent orders and imports the
+ones ApparelHub should have received:
+
+```bash
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/orders/sync" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H 'Content-Type: application/json' \
+  -d '{"store_uuid": "<store_uuid>"}'      # omit the body to sync every store
+```
+
+What it imports is deliberately narrow, because an imported paid order is sent
+to the fulfillment provider exactly as a live one would be: only orders placed
+**after the shop was connected**, not cancelled, not already fulfilled on
+Shopify, and not placed in the last few minutes (that webhook is still on its
+way). It also refreshes the store's fulfillment-provider order statuses, and
+today's analytics for any store that gained orders.
+
+Read the response, don't just report the count:
+
+- `shopify[].processed` — imported by this call; `skipped_already_present` — were
+  already here (the webhook did arrive).
+- `shopify[].not_eligible_reasons` — e.g. `{"fulfilled_upstream": 2}`. These are
+  decisions, not failures: tell the merchant why an order was left alone.
+- `shopify[].truncated: true` — more orders exist than one call reads; run it again.
+- `shopify[].outcome: "auth_revoked"` with `reconnect_url` — the shop's access
+  was revoked; the merchant must open that link to re-authorize before any
+  order can arrive.
+- `errors[]` — anything that failed, per order. Surface it.
+
 ---
 
 ## 8. The configurable fulfillment workflow (read + set it)

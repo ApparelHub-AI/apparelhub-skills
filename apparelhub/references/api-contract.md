@@ -350,6 +350,7 @@ push as `active` when the user explicitly says "make it live."
 | `POST` | `/agents/v1/orders/{uuid}/approve` | Approve a held order. |
 | `POST` | `/agents/v1/orders/{uuid}/submit` | Submit an order for fulfillment. |
 | `POST` | `/agents/v1/orders/{uuid}/cancel` | Cancel an order. |
+| `POST` | `/agents/v1/orders/sync` | Import missed orders from connected Shopify shops (scoped: post-connect, not cancelled/fulfilled) and refresh provider statuses. Optional `{store_uuid}`. Read `shopify[]` + `errors[]`. |
 | `POST` | `/agents/v1/orders/{uuid}/link-ecommerce-order` | Link a manual ApparelHub order to a storefront order. |
 
 Payment authority rules live in `references/orders-and-fulfillment.md`.
