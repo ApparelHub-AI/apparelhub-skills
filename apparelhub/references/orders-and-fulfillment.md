@@ -131,6 +131,40 @@ Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_at
 
 An ordinary `cancelled` with `needs_attention: null` is a cancellation the merchant or buyer made and that was honoured. Nothing to do. ApparelHub also alerts the merchant in-app and by email for each of these, so you can say "you should also have an email about this." MCP: `list_my_orders` and `get_order_details` return the same field.
 
+### Profit on a split checkout (`checkout_split`)
+
+When one checkout on a storefront shared by several of the merchant's stores includes items from
+more than one of them, ApparelHub creates **one order per store**, and each order holds only its
+own share of the sale's revenue, shipping and tax. So one order's own profit (`profit_margin`,
+MCP `profit`) can be negative while the sale as a whole made money. Shipping is shared out by item
+value, so the store selling the cheaper items often looks worst.
+
+`GET /orders/<uuid>` then carries `checkout_split` (`null` when the checkout wasn't split):
+
+```json
+"checkout_split": {
+  "order_count": 2,
+  "profit": 0.22,
+  "profit_complete": true,
+  "checkout_total": 76.29,
+  "orders": [
+    {"uuid": "...", "store_name": "Acme Apparel", "fulfillment_provider_name": "Printify", "profit": -7.11, "cost_known": true, "is_current": true},
+    {"uuid": "...", "store_name": "Acme Co",      "fulfillment_provider_name": "Printful", "profit": 7.33,  "cost_known": true, "is_current": false}
+  ]
+}
+```
+
+- **When asked how a sale did, report `checkout_split.profit`**, and mention that the order is
+  one part of it. Don't present a split order's own negative profit as "this sale lost money."
+- **Never add `checkout_split.profit` up across the orders in the split**: every order in it
+  carries the same figure, so summing counts the sale more than once. For totals across many
+  orders, sum each order's own `profit_margin` (or use analytics), which already adds up correctly.
+- `profit_complete: false` means a part hasn't been priced by its provider yet; call the figure
+  provisional.
+- It's `null` if the caller can't open every order in the split.
+
+MCP: `get_order_details` returns `cost`, `profit` and the same `checkout_split`.
+
 ### Orders fulfilled by the merchant's store (`fulfilled_by: "merchant"`)
 
 After a merchant imports their channel catalog (`catalog-import.md`), an order for one of their
