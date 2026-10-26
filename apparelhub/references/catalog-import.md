@@ -23,11 +23,12 @@ listings**, so you can see and reason about their whole catalog.
 
 Images are the channel's own URLs, referenced rather than copied.
 
-**Fulfilment is untouched.** Orders for the merchant's own products keep going
-wherever they go today. ApparelHub never fulfils a tracked listing. Once the
-catalog is imported, those orders are *recorded* in ApparelHub with
-`fulfilled_by: "merchant"`, so you can read every order from one place; see
-"Orders fulfilled by the merchant's store" in `orders-and-fulfillment.md`.
+**Fulfilment is untouched until you bind.** Orders for the merchant's own
+products keep going wherever they go today. Once the catalog is imported, those
+orders are *recorded* in ApparelHub with `fulfilled_by: "merchant"`, so you can
+read every order from one place; see "Orders fulfilled by the merchant's store"
+in `orders-and-fulfillment.md`. To have ApparelHub make one, bind it to an
+ApparelHub product (section 8).
 
 ---
 
@@ -174,6 +175,8 @@ Response:
 | `409` | `catalog_read_unsupported` | This channel cannot be imported yet. Do not retry |
 | `400` | `invalid_paging` / `invalid_scope` | Fix `limit`/`offset` or `scope` |
 
+Bind refusals are listed in section 8.
+
 ---
 
 ## 7. MCP
@@ -182,3 +185,68 @@ On the ApparelHub MCP server (0.17.0+) the same flow is three tools:
 `import_channel_catalog` (start; on `import_in_progress` it returns the run
 already going, with `already_running: true`), `get_catalog_import_run` (poll),
 and `list_tracked_listings` (read, including each channel's `catalog_read`).
+
+---
+
+## 8. Make a tracked listing fulfillable (bind it to a product)
+
+When the merchant wants ApparelHub to make an item they already sell, bind its
+tracked listing to an ApparelHub product. From then on, orders for that listing
+are **ordinary ApparelHub orders**: sent to the product's fulfillment provider
+under the store's usual settings, and counted and billed like any other order.
+
+**What it never does:** change the merchant's listing on the channel. Its title,
+images, price and SKUs stay exactly as they are. While bound, that product
+**cannot be synced to that channel** (`409 bound_to_existing_listing`), because
+it would create a duplicate listing. Tell the merchant both things.
+
+1. **Build the product first, the normal way**, in the same store: their artwork
+   on one of our blanks, variants added, then synced to fulfillment
+   (`POST /store/{store_uuid}/products/{product_uuid}/sync?target=merchandise`).
+   Bind refuses a product that cannot be made yet.
+2. **Preview** with `dry_run`:
+   `POST /store/{store_uuid}/catalog/{listing_uuid}/bind`
+   `{"product_uuid": "...", "dry_run": true}`
+   returns `ready`, `mapped`, `unmapped` (channel variants still needing a match),
+   `product_variants` (the choices), and `blocked` when the product cannot be made.
+   Changes nothing.
+3. **Fill the gaps.** Channel variants auto-match by option names
+   (`Black / Medium` matches a Black, M variant; size spellings like `XXL` and
+   `2XL` are treated as the same). For anything in `unmapped`, choose a product
+   variant (ask the merchant when the names don't make it obvious) and pass
+   `variant_map`: `{"<external_variant_id>": "<variant_uuid>"}`. TikTok Shop
+   listings carry no option names, so they always need a map. A listing with no
+   variants is keyed by its own `external_id`.
+4. **Bind** with the same body minus `dry_run`. **Every** channel variant must
+   map: an order can never arrive for a size ApparelHub cannot make.
+
+```bash
+curl -s -X POST "https://api.apparelhub.ai/agents/v1/store/<store_uuid>/catalog/<listing_uuid>/bind" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"product_uuid": "<product_uuid>", "variant_map": {"<external_variant_id>": "<variant_uuid>"}}'
+```
+
+A bound listing appears in `GET /store/{store_uuid}/catalog?scope=external` with
+`bound: true` and `binding` (`product_uuid`, `product_name`, `bound_at`, and each
+channel variant's `variant_uuid`). `made_in_apparelhub` stays `false`: it is
+still the merchant's listing.
+
+**Unbind** with `DELETE /store/{store_uuid}/catalog/{listing_uuid}/bind`. New
+orders for it go back to being recorded as fulfilled by the merchant. Orders
+already sent to the provider are not affected.
+
+| Status | `error` | What to do |
+|---|---|---|
+| `409` | `unmapped_variants` | Some channel variants have no match. The body lists `unmapped` and `product_variants`; add them to `variant_map` |
+| `409` | `product_not_synced_to_provider` / `variants_not_synced_to_provider` | Sync the product to fulfillment, then bind |
+| `409` | `product_not_active` / `product_has_no_variants` | Activate the product, or add its variants |
+| `409` | `product_not_in_store` | Use a product in this store |
+| `409` | `listing_made_in_apparelhub` | Nothing to do: ApparelHub made it and already fulfils it |
+| `409` | `listing_already_bound` | Unbind first to bind a different product |
+| `409` | `listing_removed` | It left the channel; nothing to fulfil |
+| `400` | `unknown_channel_variant` / `variant_not_in_product` | A `variant_map` key or value is wrong |
+| `409` | `listing_not_bound` | (unbind) Nothing to do |
+
+MCP (0.20.0+): `bind_tracked_listing` previews and binds in one call (it only
+binds when everything maps; otherwise it returns `bound: false` with what is
+left), and `unbind_tracked_listing`.
