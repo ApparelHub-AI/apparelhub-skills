@@ -136,8 +136,14 @@ An ordinary `cancelled` with `needs_attention: null` is a cancellation the merch
 When one checkout on a storefront shared by several of the merchant's stores includes items from
 more than one of them, ApparelHub creates **one order per store**, and each order holds only its
 own share of the sale's revenue, shipping and tax. So one order's own profit (`profit_margin`,
-MCP `profit`) can be negative while the sale as a whole made money. Shipping is shared out by item
-value, so the store selling the cheaper items often looks worst.
+MCP `profit`) can be negative while the sale as a whole made money.
+
+Shipping starts out shared by item value, because that's all that's known when the orders are
+created. Once every order in the split has been priced by its provider, the buyer's shipping is
+re-divided by what each provider actually charged to ship (`provider_shipping_cost` on each order),
+so each order's own profit becomes realistic. Only shipping moves: the buyer's total and the
+checkout's combined profit don't change. So an order's `shipping_cost`, `total_price` and
+`profit_margin` can change after it was created; read them fresh rather than caching them.
 
 `GET /orders/<uuid>` then carries `checkout_split` (`null` when the checkout wasn't split):
 
