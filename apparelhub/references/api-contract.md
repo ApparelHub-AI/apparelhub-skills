@@ -85,6 +85,18 @@ the prompt in context if the call is one you intended to make.
 
 - `source` is the model NAME as a string: `"Nano Banana"`, `"Seedream 4.0"`, `"Seedream 4.5"`, `"OpenAI"`, `"Flux 1.1 Pro"`, `"Flux 2 Pro"`, `"Google Imagen 4"`, `"GPT Image 2"`, `"Grok Imagine"`, `"Wan 2.7"`. **Not** a UUID.
 - For img2img edit mode, add `source_image_uuid` (an existing image you generated) OR submit multipart with `images=@/path/to/file.png`. Only `Nano Banana` and `OpenAI` support edit; Replicate-backed models return 422 if you try.
+- Optional, text-to-image only: `background_color` (`#RRGGBB` key screen you chose), `intent` (`"all_over"` leaves prompt and background alone), `auto_key` (`false` sends the prompt verbatim and removes nothing), `prompt_improvement` (`"skip"` keeps your wording). With none of them the background is decided from the prompt. See `references/design-rules.md` section 3c.
+
+**What comes back besides the image** (200, 202 and the status poll):
+
+| Block | Read it for |
+|---|---|
+| `design_intent` | What the platform understood: `background` (`isolated` / `full_scene` / `unknown`), `key_color`, `garment` (`category`, `descriptor`), `source`. Also on `GET /agents/v1/images/generated/{uuid}`. |
+| `print_ready` | What was done to the background: `applied`, `reason`, and a `message` when the design is not print-ready. |
+| `prompt_improvement` | Advice on the prompt. `applied: true` means the rewritten prompt was generated instead of your wording (only when the prompt named the product). |
+| `background_state` | Measured from the stored design: `transparent`, `opaque_box`, `opaque_varied`, `unknown`. Status poll and design reads. |
+
+Uploads carry `upload_assessment` (`has_transparency`, `opaque_uniform_background`, `looks_like_photo`) on the status poll and the design detail. See `references/byo-artwork.md` section 4.
 
 **`POST /images/generated/{uuid}/transform` request**:
 
@@ -325,6 +337,8 @@ caps: `references/product-imagery.md`.
 |---|---|---|
 | `GET` | `/agents/v1/store` | List the user's stores. |
 | `GET` | `/agents/v1/store/{uuid}` | Inspect one store (integrations, settings). |
+| `POST` | `/agents/v1/store` | Create a store: body `{"name": "Acme Apparel"}`. `name` is trimmed and must not be empty, or the call returns `400 store_name_required`. Only create one when the user asks for a new store. |
+| `POST` | `/agents/v1/store/create/merchandise_provider/{provider_uuid}` | Start connecting a fulfillment provider. Send `{"store_uuid": "<store_uuid>"}` to connect INTO an existing store (recommended whenever the account has one). Without `store_uuid` it creates a store first and then needs a non-empty `name` (the field is `name`, not `store_name`). See `references/error-handling.md` section 2e-bis. |
 | `GET` | `/agents/v1/store/{uuid}/products` | List products on a store. Supports `?fields=...` for sparse payloads. |
 | `POST` | `/agents/v1/store/{uuid}/products` | Add products to a store: body `{"product_uuids": [...]}`. |
 | `DELETE` | `/agents/v1/store/{uuid}/products/{product_uuid}` | Remove a product from a store. |
