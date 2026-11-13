@@ -136,6 +136,18 @@ rather than silently mangled:
   so it would render as a hole. Re-export with the image embedded, or flatten the
   whole thing to PNG. Inline `data:` URIs are fine.
 
+**The document size can be in any unit.** An SVG sized in pixels, inches,
+millimetres, centimetres or points uploads as it is. So does one with no size, a
+percentage size, or a zero or negative size on its root element: the size is then
+taken from the `viewBox`, or from the artwork itself. Do not ask a client to
+re-export only to change units.
+
+**A refused SVG says why.** The status poll comes back `failed` with a stable
+`error_code`: `svg_no_size`, `svg_text_not_outlined`, `svg_external_reference`,
+`svg_rendered_blank`, `svg_too_large` or `svg_invalid`. Branch on the code, not
+the prose. What each one means and what to tell the user:
+`references/error-handling.md` section 2a-bis.
+
 **PNG is the right raster default** — the only common raster format that carries
 transparency, which a logo sitting on a coloured garment needs.
 
@@ -187,15 +199,50 @@ has a bigger file, ask for it.
 
 ## 4. After the upload
 
+### Read `upload_assessment` first
+
+Once an upload reaches `completed`, the status poll
+(`GET /agents/v1/images/upload/<image_uuid>/status`) and the design detail
+(`GET /agents/v1/images/generated/<image_uuid>`) carry an `upload_assessment`
+block that says what kind of image it is:
+
+```json
+"upload_assessment": {
+  "has_transparency": false,
+  "opaque_uniform_background": true,
+  "looks_like_photo": false
+}
+```
+
+At most one flag is true. It is a hint and never blocks anything.
+
+| Flag that is true | What it means | What to do |
+|---|---|---|
+| `has_transparency` | The file has real transparency. | Ready to place on a product as it stands. Go to the mockup. |
+| `opaque_uniform_background` | Opaque, with one flat colour all the way round the edge (a logo on white, for example). Placed on a garment it prints as a rectangle. | The background can very likely be removed: `POST /agents/v1/images/generated/<image_uuid>/remove-background` (no generation is spent). Tell the user you are doing it, read the result's `background_state`, then render the mockup. If the client forbade any change to the mark, ask for a transparent version instead. |
+| `looks_like_photo` | Opaque, no flat edge colour, many colours. Probably a photograph of a product or a scene, not artwork to print. | Background removal will not help. Ask whether they have the artwork file itself. If the photo IS the design (a full-bleed print), carry on and say it will print with its background. |
+| none | Opaque, but neither of the two patterns above. | Look at it, and check `design_check` on the mockup (`references/design-rules.md` section 3b). |
+
+The block is absent on generated designs and on uploads processed before it
+existed. Absent means "not assessed", never "fine".
+
+**MCP callers:** `upload_design` returns `upload_assessment` and adds a warning in
+words for the flat-background and photograph cases; a refused SVG comes back as
+an error whose code is the SVG code. MCP server 0.20.1 or later.
+
+### Then the normal pipeline
+
 From here it is the normal pipeline — see
 `references/product-creation-pipeline.md`. Two things worth knowing:
 
 - **Transparency keying does not apply.** The chroma-key step exists because AI
   generators cannot produce real transparency, so we ask for a green background
   and key it out. A client's PNG either already has an alpha channel or it does
-  not. Do not run it through the keyer hoping to improve it — if the background
-  is opaque white and needs to be transparent, that is a question for the client
-  ("do you have this with a transparent background?"), not something to guess at.
+  not. Do not run it through the keyer hoping to improve it. If the background
+  is opaque and needs to be transparent, let `upload_assessment` (above) decide:
+  a flat uniform background can be removed with `remove-background`, and anything
+  else is a question for the client ("do you have this with a transparent
+  background?"), not something to guess at.
 - **Quality checks still apply.** Run the mockup gate as usual and inspect the
   render at full size. A client file can still be too low-resolution, wrongly
   proportioned for the print area, or wrong for the garment colour.

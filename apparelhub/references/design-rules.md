@@ -16,6 +16,8 @@ The image IS the design that goes ON the product. The garment is the medium, not
 
 If the user prompts you with "make me a t-shirt with X", REPHRASE silently before sending to the image API. Generate the design, then put it on the product in Phase 3.
 
+**The platform now backs this up, but rephrasing yourself is still better.** When a text-to-image prompt names or depicts the product and you left `prompt_improvement` at its default, the image model is sent a rewritten prompt that keeps your subject and removes the product words. The response says so: `prompt_improvement.applied` is `true`, `design_intent.source` is `"llm_rewrite"`, and your own words are kept as `original_prompt`. If you rephrase first, nothing is replaced and you choose the wording. Details and opt-outs: section 3c.
+
 ---
 
 ## 2. The "don't name the product in the prompt" trap
@@ -66,6 +68,9 @@ Text-to-image generations intended for a placed print are keyed to transparency 
 | `reason: all_over_intent` | Left opaque on purpose. | Nothing. This is correct for full-bleed. |
 | `reason: subject_consumed` | The artwork shared its background colour. | Generate again with a different `background_color`. |
 | `reason: no_background_found` / `chroma_not_green` | Could not key it. | Check the mockup before creating the product; `process_transparency` with an explicit `--chroma`, or regenerate. |
+| `reason: full_scene_intent` | The prompt read as a full scene (a photo-like scene, a poster, a landscape, an all-over pattern), so the background was kept on purpose. | Nothing, when a scene is what the user asked for. It prints as a rectangle. If they wanted isolated artwork, generate again and write the key-screen clause yourself. |
+| `applied: true`, `reason: scene_on_key_cropped` | The image model drew a boxed scene on the key colour. The design was stored as the clean rectangular crop of that scene, and it is opaque (`background_state` says so). | Treat it as a full scene. Do NOT key it. If isolated artwork was wanted, generate again describing only the subject. |
+| `reason: fake_transparency_checkerboard` | NOT print-ready. A grey and white "transparency" checkerboard is drawn into the image and would print on the product. Comes with a `message` you can show the user. | Do not build a product from it and do not try to key it. Generate again, describing only the artwork (plus the key-screen clause). |
 
 **This does not make `process_transparency` obsolete.** It still applies to designs you UPLOADED (never auto-prepared), designs generated before this shipped, and any design where auto-prepare refused. Read `print_ready.applied` rather than assuming either way.
 
@@ -103,6 +108,83 @@ A design created before this check existed may show no `design_check` on the fir
 **It is gated to PLACED prints only.** A full-bleed / all-over design is supposed to be opaque edge to edge, so it is never flagged, and you must not "fix" one. Check `print_style` before acting on anything you infer yourself.
 
 Designs are reported as one of four `background_state` values: `transparent` (ready), `opaque_box` (will print as a rectangle), `opaque_varied` (opaque but a photograph, with no flat border to remove, so removing a background is the WRONG move), and `unknown` (not inspected; say nothing).
+
+---
+
+## 3c. What the platform decides from your prompt, and how to read it back
+
+This section is about **text-to-image generations only**. An edit (section 5b) is never touched: its prompt is a change description.
+
+Writing the key-screen clause yourself (section 3) is still the most predictable route, and nothing here changes it. What is new is what happens when a prompt arrives without one, or asks for something an image model cannot do.
+
+### The order the background is decided in
+
+The first row that applies wins.
+
+| # | The request | What the platform does |
+|---|---|---|
+| 1 | `"auto_key": false` | Sends the prompt exactly as written and removes nothing. |
+| 2 | `"intent": "all_over"` | Leaves the prompt and the background alone. An all-over design is meant to be opaque edge to edge. |
+| 3 | `"background_color": "#RRGGBB"` | Uses your colour as the key screen and keeps your wording. |
+| 4 | The prompt names a key colour as its background: `#00FF00`, `#FF00FF`, `#0000FF`, or a phrase such as "green background", "magenta screen", "chroma key green" | Treats that colour as the key screen and removes it, even when the image model draws a muted shade of it. Earlier, only an exact pure green in the corners was removed. |
+| 5 | The prompt asks for transparency: "transparent background", "no background", "transparent PNG" and similar | Replaces that phrase with a solid key colour background before the image model sees the prompt, then removes the colour. Image models cannot produce real transparency. Asked for it, they paint a checkerboard. |
+| 6 | Anything else | A classifier reads the prompt. **`isolated`** artwork (a logo, lettering, a character, a badge) gets a key-screen instruction appended and its background removed. A **`full_scene`** (a photo-like scene, a poster, a landscape, an all-over pattern) is left exactly as written and is not keyed. |
+
+A prompt that already describes a background of its own ("on a navy circle", "over a sunset sky") does not get a second one added. Check `design_check` on the mockup (section 3b) to see whether it will print as a rectangle.
+
+### The one case where your wording is replaced
+
+When the prompt names or depicts the garment or product ("a t-shirt with a wolf on it", "hoodie with my brand name"), and you left `prompt_improvement` at its default, the image model is sent a rewritten prompt that keeps the subject and removes the product words. Naming the product makes image models draw a picture of the product (sections 1 and 2), and no added instruction reliably prevents it.
+
+You can always tell it happened:
+
+- `prompt_improvement.applied` is `true` (it is `false` whenever the suggestion was only advice)
+- `design_intent.source` is `"llm_rewrite"`
+- your own words are kept as `original_prompt` in the response's `context.data`, next to the `prompt` the model received
+
+Tell the user when it matters to them, for example: "I generated the wolf artwork on its own so it prints cleanly on the shirt." The product they named is not lost: it is in `design_intent.garment`, which is what you use to pick the garment in Phase 3.
+
+### Reading `design_intent`
+
+`design_intent` is returned by `POST /agents/v1/images/generate` (both the 200 and the 202), by the status poll `GET /agents/v1/images/upload/<image_uuid>/status`, and by `GET /agents/v1/images/generated/<image_uuid>`. It is absent on edits and on designs generated before this existed.
+
+```json
+"design_intent": {
+  "background": "isolated",
+  "key_color": "#00FF00",
+  "garment": { "category": "hoodie", "descriptor": "oversized" },
+  "source": "llm_rewrite"
+}
+```
+
+| Field | Values | Meaning |
+|---|---|---|
+| `background` | `isolated`, `full_scene`, `unknown` | `isolated`: generated on a solid colour that is then removed. `full_scene`: the whole rectangle is the design, so nothing was added and nothing is removed. `unknown`: not determined, nothing was changed. |
+| `key_color` | `#RRGGBB` or `null` | The solid background the design was generated on, and what removal targets. `null` when no colour applies. |
+| `garment.category` | `tee`, `tank`, `long_sleeve`, `hoodie`, `sweatshirt`, `hat`, `beanie`, `mug`, `tote`, `phone_case`, `poster`, `sticker`, `pillow`, `other`, `none` | The product the prompt named. `none` means it named no product. `other` is a product outside this list. |
+| `garment.descriptor` | free text | The prompt's own fit, audience or style words ("women's cropped"). Empty when there are none. |
+| `source` | `request`, `prompt`, `llm`, `llm_rewrite`, `suggestion`, `none` | What decided it. `request`: your own `background_color`, `intent` or `auto_key`. `prompt`: read from the prompt text (rows 4 and 5). `llm`: the classifier (row 6). `llm_rewrite`: your prompt named the product, so the rewritten prompt was generated. `suggestion`: recovered from a `prompt-improve` suggestion you already consulted. `none`: nothing decided it, and behaviour is unchanged. |
+
+### After every generation, read three things
+
+1. **`prompt_improvement.applied`**. `true` means the model was sent the rewritten prompt, not your words. Judge the result against `improved_prompt`.
+2. **`design_intent.background`**. `isolated` means expect transparency. `full_scene` means it is opaque on purpose and will print as a rectangle: correct for a poster or an all-over product, a surprise on a tee, so say so before building.
+3. **`print_ready`** (table in section 3) plus `background_state`. `applied: true` with `background_state: transparent` is ready to place. Anything else, follow the row for its `reason`.
+
+On a 202 the `print_ready` block only says what WILL be attempted. The outcome is on the status poll once `processing_status` is `completed`.
+
+### Opt-outs, and when to use each
+
+| Send | Effect | Use it when |
+|---|---|---|
+| `"prompt_improvement": "skip"` | Your wording is kept. A background instruction may still be added, and the background is still removed for isolated artwork. | The exact wording matters (a brand's own phrasing, a prompt the user approved word for word) and you still want a transparent result. |
+| `"auto_key": false` | The prompt is sent verbatim and nothing is removed. | You want the raw image exactly as the model drew it, or you will key it yourself. |
+| `"intent": "all_over"` | Prompt and background are both left alone. | The design is for an all-over or full-bleed product (pillow, doormat, AOP tee, phone case). See `references/all-over-print.md`. |
+| `"background_color": "#RRGGBB"` | Your wording is kept and your colour is the key screen. Name the same colour in the prompt: the image model only ever sees the prompt. | You picked the key colour on purpose, for example magenta behind green artwork (section 3). |
+
+A full scene needs no opt-out. It is recognised and left alone. If a scene is misread as isolated artwork, `"intent": "all_over"` or `"auto_key": false` settles it.
+
+**MCP callers:** `generate_image` returns `design_intent`, `print_ready` and `background_state`, and `design_apparel` returns them per design, in MCP server 0.20.1 or later. The `prompt_improvement` and `auto_key` INPUTS on `generate_image` need MCP server 0.21.0 or later. On an older server the opt-outs still work against the raw API: send them in the body of `POST images/generate` through `api_request`, then poll `images/upload/<image_uuid>/status`.
 
 ---
 

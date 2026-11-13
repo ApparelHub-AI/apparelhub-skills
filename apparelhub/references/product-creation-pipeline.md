@@ -33,6 +33,8 @@ curl -sS -X POST "https://api.apparelhub.ai/agents/v1/images/generate" -H "x-api
 
 The extra phrasing on the background is deliberate. AI generators routinely ignore "#00FF00" and produce a yellow-green or olive background instead. When that happens, the keying step in Phase 2 will consume warm design elements (yellow suns, gold details) because they fall inside the tolerance window around the actual background color. The `make_transparent.py` script in Phase 2 has a sanity check that rejects non-#00FF00 backgrounds and tells the agent to regenerate — but it's cheaper to get the right background first.
 
+**If you leave the background clause out, the platform decides from the prompt.** Isolated artwork is generated on a key colour and comes back with the background already removed; a full scene is left exactly as written; a request for a "transparent background" is replaced with a key colour and then removed. The response reports what was decided in `design_intent`, what was done in `print_ready`, and whether your wording was replaced in `prompt_improvement.applied`. Writing the clause yourself, as above, is still the most predictable route. Full contract and the opt-outs (`prompt_improvement: "skip"`, `auto_key: false`, `intent: "all_over"`, `background_color`): `references/design-rules.md` section 3c.
+
 **Two response shapes (branch on the HTTP status code):**
 
 - **The one fast model** (`Grok Imagine`) returns **200** with `{ "generated_image": { "uuid": "...", "url": "..." } }` directly. Save the UUID + url and continue.
@@ -58,6 +60,8 @@ Save the resulting image UUID (and url) for the rest of the pipeline.
 - Vision-verification of any text in the design
 - Which AI source to use for which kind of design (table)
 - **`POST /images/generate` ALSO supports img2img edit** when the user wants to iterate on an existing design — pass `source_image_uuid` (gallery) or `images=@...` (upload). Only Nano Banana and OpenAI support edit mode. See section 5b in design-rules.md for the request shape + field-name gotchas.
+
+**After Phase 1, read `print_ready` before deciding anything.** When the completed design reports `print_ready.applied: true` and `background_state: transparent`, the platform has already removed the background: skip Phase 2 and use this design uuid as it is. When `print_ready.reason` is `full_scene_intent` or `scene_on_key_cropped`, the design is an opaque scene on purpose: do not key it. When it is `fake_transparency_checkerboard`, generate again. Everything else follows the table below.
 
 **After Phase 1 — decide whether Phase 2 is required:**
 

@@ -101,7 +101,10 @@ supported: `references/byo-artwork.md`. Three routes (public `source_url`, a
 presigned URL you PUT to yourself, or inline base64), all of which return a uuid
 that works anywhere a generated design uuid works.
 
-Codes you may see on that path:
+Codes you may see on that path. A refused upload comes back from the status
+poll (`GET /agents/v1/images/upload/<image_uuid>/status`) as
+`processing_status: "failed"` with a human-readable `error` and, for the SVG
+refusals below, a stable `error_code`. Branch on the code.
 
 ### `unsupported_format`
 
@@ -131,6 +134,25 @@ Inline `data:` URIs are fine.
 
 The document drew nothing, could not be parsed, or is over the 8MB source ceiling.
 Flatten and re-export, or supply a PNG.
+
+### `svg_no_size`
+
+The SVG gives no usable size and none could be worked out from its `viewBox` or
+its artwork. This is now rare: files sized in physical units (in, mm, cm, pt),
+and files with a missing, percentage, zero or negative root size, upload
+normally. When you do see it, ask for a re-export with the artboard fitted to
+the artwork, or a PNG at print size.
+
+**What to tell the user, by code:**
+
+| `error_code` | Say |
+|---|---|
+| `svg_no_size` | "The file has no page size I can read. Please re-export it with the artboard fitted to the artwork, or send a PNG." |
+| `svg_text_not_outlined` | "The lettering is still live text. Please convert text to outlines and export again." (Never retype it yourself.) |
+| `svg_external_reference` | "The file links to an image instead of containing it. Please embed the image and export again, or send a PNG." |
+| `svg_rendered_blank` | "The file came out empty. Please flatten the artwork and export again, or send a PNG." |
+| `svg_too_large` | "The SVG is over the 8MB limit. Please simplify it, or send a PNG at print size." |
+| `svg_invalid` | "The file could not be read as an SVG. Please export it again, or send a PNG." |
 
 ### `invalid_source_url`
 
@@ -464,6 +486,51 @@ records the block, so you can tell. Where a compliance-checking capability is
 available to you (the MCP server exposes `check_design_compliance`), this is
 exactly the design to run it on. This is cheap and it keeps the merchant, whose
 name is on the product, out of an argument they did not choose.
+
+---
+
+## 2e-bis. Creating a store: `store_name_required` (400), and when not to create one
+
+Two calls can create a store:
+
+- `POST /agents/v1/store` with `{"name": "Acme Apparel"}`
+- `POST /agents/v1/store/create/merchandise_provider/<provider_uuid>` **without** a
+  `store_uuid` in the body (it creates the store, then starts the provider
+  connection)
+
+Both need a real name. An empty, whitespace-only or missing `name` returns:
+
+```json
+400 { "error_code": "store_name_required", "field": "name",
+      "message": "A store name is required to create a new store. Enter a name and try again." }
+```
+
+Nothing was created. Ask the user what the store should be called and send the
+call again; do not invent a name for them.
+
+The body field is **`name`**. Earlier API documentation called it `store_name` on
+the provider route; a body carrying only `store_name` has no usable name and gets
+this error.
+
+⛔ **Do not create a second store just to connect a provider or a channel.** List
+the stores first (`GET /agents/v1/store`). When the account already has the store
+the user means, connect INTO it by sending its uuid:
+
+```bash
+curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/create/merchandise_provider/<provider_uuid>" \
+  -H "x-api-key: $APPARELHUB_API_KEY" -H "Content-Type: application/json" \
+  -d '{"store_uuid": "<store_uuid>"}'
+```
+
+With `store_uuid` supplied the name is ignored and this path is unchanged. One
+store can hold several fulfillment providers and several sales channels, so a new
+store is only right when the user asks for one (a separate brand or client, for
+example).
+
+**MCP callers:** `connect_fulfillment_provider` and `start_channel_connect` take
+`store_uuid` to connect into an existing store. `create_store` and
+`start_channel_connect` report a missing name as `store_name_required`. MCP server
+0.20.1 or later.
 
 ---
 

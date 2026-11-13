@@ -66,7 +66,10 @@ https://api.apparelhub.ai/agents/v1/
   (`#00FF00`), then flood-fill key it out, then pre-multiply transparent pixels
   with white RGB before uploading. AI models cannot generate real alpha
   channels. They bake a fake checkerboard pattern into RGB pixels if you ask
-  for "transparent background" directly.
+  for "transparent background" directly. The platform also prepares designs
+  itself at generation: read `print_ready` and `design_intent` on the result
+  before keying anything, and skip the keying step when `print_ready.applied`
+  is true.
 - **Always verify text in designs with a vision check** before generating
   mockups. Even the best models occasionally misspell.
 - **Never sync products to a store without explicit user approval.** The user
