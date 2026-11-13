@@ -184,7 +184,7 @@ On a 202 the `print_ready` block only says what WILL be attempted. The outcome i
 
 A full scene needs no opt-out. It is recognised and left alone. If a scene is misread as isolated artwork, `"intent": "all_over"` or `"auto_key": false` settles it.
 
-**MCP callers:** `generate_image` returns `design_intent`, `print_ready` and `background_state` and accepts `prompt_improvement` and `auto_key`; `design_apparel` returns them per design. MCP server 0.20.1 or later.
+**MCP callers:** `generate_image` returns `design_intent`, `print_ready` and `background_state`, and `design_apparel` returns them per design, in MCP server 0.20.1 or later. The `prompt_improvement` and `auto_key` INPUTS on `generate_image` need MCP server 0.21.0 or later. On an older server the opt-outs still work against the raw API: send them in the body of `POST images/generate` through `api_request`, then poll `images/upload/<image_uuid>/status`.
 
 ---
 
