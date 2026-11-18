@@ -4,9 +4,10 @@ Read this before you connect Toolbox POD, build a product on it, pick it
 over another provider, or act on an order that one of its products is in.
 
 Toolbox POD is a print on demand shop in Utah that prints and ships its own
-orders. In API responses its provider `name` reads **`ToolboxPOD`** (one
-word); match on that field, and call it "Toolbox POD" when you talk to the
-merchant.
+orders. Find it by comparing provider names with case, spaces and
+punctuation ignored (`toolboxpod`), never by an exact string: its display
+name may read `Toolbox POD` or `ToolboxPOD`. Call it "Toolbox POD" when you
+talk to the merchant.
 
 Like every provider in ApparelHub, it is **bring your own account**: the
 merchant connects their own Toolbox POD account and Toolbox POD bills the
@@ -46,7 +47,8 @@ apply to it. Never ask the merchant for a Toolbox POD key.
    one serving international buyers), ask whether Toolbox POD should go in a
    separate store connected to the same storefront.
 2. Find the provider uuid: `GET /agents/v1/merchandise/providers`, the row
-   whose `name` is `ToolboxPOD`.
+   whose `name`, lowercased with spaces and punctuation removed, is
+   `toolboxpod`.
 3. Start the connect:
 
    ```bash
@@ -187,7 +189,7 @@ never sent to Toolbox POD**, so nothing is charged. The order shows
 "hold_details": {
   "code": "destination_unsupported",
   "country": "CA",
-  "provider_name": "ToolboxPOD",
+  "provider_name": "Toolbox POD",
   "ships_to": ["US"],
   "product_variant_ids": [123],
   "items": [{"name": "Sunset Tee", "quantity": 1, "product_variant_id": 123}],

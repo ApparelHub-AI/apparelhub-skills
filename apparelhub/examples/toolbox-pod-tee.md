@@ -29,7 +29,8 @@ user decide before you go on.
 ## Step 2: Connect Toolbox POD (the merchant signs in)
 
 ```bash
-# Find the provider: the row whose name is "ToolboxPOD", and note ships_to: ["US"]
+# Find the provider: the row whose name matches "toolboxpod" ignoring case, spaces and
+# punctuation (it may read "Toolbox POD" or "ToolboxPOD"), and note ships_to: ["US"]
 curl -sS "https://api.apparelhub.ai/agents/v1/merchandise/providers" -H "x-api-key: $APPARELHUB_API_KEY"
 
 curl -sS -X POST "https://api.apparelhub.ai/agents/v1/store/create/merchandise_provider/<toolboxpod_provider_uuid>" \
