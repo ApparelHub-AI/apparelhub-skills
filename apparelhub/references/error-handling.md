@@ -596,7 +596,7 @@ answer different questions:
 
 - **PAT / API key** (Printify, Gelato) — the credential is static, so the check
   spends it against the provider.
-- **OAuth** (Printful) — the access token expires roughly hourly and is
+- **OAuth** (Printful, Toolbox POD) — the access token expires roughly hourly and is
   refreshed on every store-scoped call, so its expiry proves nothing. The check
   exercises the **refresh** token instead.
 
@@ -604,6 +604,17 @@ answer different questions:
 near expiry **will refresh and persist a new one**. That is intended, and it is
 the same thing any other store-scoped call would have done, but it does mean
 this endpoint is not strictly read-only. Do not poll it in a loop.
+
+### Toolbox POD's itemised report
+
+Toolbox POD answers with what is wrong, not just whether: `checks` (`token`,
+`scopes`, `mode`, `purchasing`, `webhook`, each `ok` true / false / null),
+merchant-ready `fixes[]`, and `reason` `ok` or `action_required` besides the
+reasons above (plus `provider_rate_limited`, which is unknown like
+`provider_unreachable`). The usual one to act on is `purchasing.ok: false`:
+the merchant has not turned on purchasing or set a spending limit, so orders
+cannot be paid. Relay the fix. Details in `references/toolbox-pod.md`
+section 7.
 
 ---
 

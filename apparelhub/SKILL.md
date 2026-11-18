@@ -21,7 +21,8 @@ this skill when the user wants to:
 - Create products and sync them to sales channels
   (Shopify, WooCommerce, Wix, TikTok Shop). ApparelHub does not
   integrate Etsy; do not offer to list there.
-- Manage orders and fulfillment via Printful / Printify
+- Manage orders and fulfillment through the merchant's own providers
+  (Printful, Printify, Gelato, Toolbox POD)
 - Browse the catalog of garments available for printing
 
 When you drive the platform over raw HTTP (the fallback path — see the
@@ -231,6 +232,8 @@ reference up front saves you from shipping a broken product.
 | **Reading what a generation did** (`design_intent`, `print_ready.reason`, `prompt_improvement.applied`), a prompt that asked for a "transparent background", or a prompt that named the product | `references/design-rules.md` section 3c. For text-to-image the platform decides the background from the prompt: isolated artwork is generated on a key colour and comes back transparent, a full scene is left exactly as written, and a prompt that names the garment is rewritten without the product words (`prompt_improvement.applied: true`, your words kept as `original_prompt`). Opt-outs: `prompt_improvement: "skip"`, `auto_key: false`, `intent: "all_over"`, your own `background_color`. Writing the key-screen clause yourself is still the most predictable route. |
 | **Creating a store, or connecting a fulfillment provider or sales channel** | `references/error-handling.md` section 2e-bis. List the stores first and connect INTO the one the account already has (send its `store_uuid`); do not create a second store just to connect something. A new store needs a non-empty `name` (the field is `name`), or the call returns `400 store_name_required`. |
 | Standard apparel (tees, hoodies, tanks, sweatshirts) | `references/product-creation-pipeline.md` |
+| **Toolbox POD** (connecting it, choosing it, building on it, or an order for one of its products) | `references/toolbox-pod.md`. A US print shop: Gildan 64000 and Comfort Colors 1717 tees and a Lane Seven hoodie, front / back / both, one flat shipping fee per ORDER. Connect is a merchant sign-in (never a key); the merchant must turn on purchasing with a spending limit or orders wait. **US addresses only.** Read live costs from the catalog. ⛔ Confirming pays, and a paid order is final. |
+| **Where a provider can ship** (`ships_to`), a store's `shipping_warnings`, or an order held as `destination_unsupported` | `references/provider-selection.md` section 7 and `references/orders-and-fulfillment.md` section 5b. `null` / absent / `[]` `ships_to` means worldwide. A held order was never sent or charged; move it with `POST /orders/<uuid>/reroute` only when `hold_details.suggested_reroute` is set, otherwise the merchant cancels and refunds on their storefront. |
 | **Embroidered apparel** (Champion Anorak, polos, jackets — and headwear only once you have CONFIRMED that garment is embroidered) | `references/embroidery.md` covers the 15-color thread palette + the `thread_colors_<placement>` option-placement trap. Skipping this guarantees a 400 from the provider. Do not assume headwear is embroidered: it spans both families, and assuming is what makes a printable cap invisible. |
 | **A garment can't take this design** (embroidery vs print, photoreal artwork refused, "no <item> is possible") | `references/provider-selection.md`. Capability limits are almost always scoped to ONE provider, not to the category. Enumerate providers with `find_garments` BEFORE reporting that something cannot be built. |
 | All-over print (pillows, doormats, area rugs, luggage tags, AOP tees, phone cases, mugs) | `references/all-over-print.md` covers edge-to-edge background rules, product-specific gotchas, the "don't name the product in the AI prompt" trap |
@@ -259,6 +262,7 @@ adapt:
 | Reviewing + approving a held order as an agent (workflow config → poll the queue → approve/hold) | `examples/order-management.md` |
 | **A garment can't take the design** — the constraint is one provider's, not the category's; enumerate and build elsewhere | `examples/blocked-garment-find-alternative.md` |
 | Attaching a photo to an EXISTING listing + ordering the gallery for a capped channel | `examples/product-imagery-attach-and-order.md` |
+| Connecting Toolbox POD and building + listing a tee for US buyers | `examples/toolbox-pod-tee.md` |
 
 ---
 
