@@ -105,6 +105,16 @@ First embroidered garment we shipped. Quarter-zip pullover with hood.
 
 ---
 
+## Toolbox POD garments (US shipping only)
+
+Toolbox POD carries a Gildan 64000 Softstyle tee, a Comfort Colors 1717
+tee and a Lane Seven LS14001 hoodie, front, back or both, S to 3XL, with one
+flat shipping fee per order. It ships to US addresses only. Costs, codes and
+how to choose it are in `references/toolbox-pod.md`; read the live cost from
+the catalog, never from a table.
+
+---
+
 ## All-over-print products
 
 | Product | Printful ID | Print area | Variants of note |

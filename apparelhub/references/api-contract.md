@@ -364,6 +364,7 @@ push as `active` when the user explicitly says "make it live."
 | `POST` | `/agents/v1/orders/{uuid}/approve` | Approve a held order. |
 | `POST` | `/agents/v1/orders/{uuid}/submit` | Submit an order for fulfillment. |
 | `POST` | `/agents/v1/orders/{uuid}/cancel` | Cancel an order. |
+| `POST` | `/agents/v1/orders/{uuid}/reroute` | Move an order held as `destination_unsupported` to `hold_details.suggested_reroute.product_uuid` (body `{"product_uuid"}`). Only within the order's own storefront; 409 otherwise. See `references/orders-and-fulfillment.md` section 5b. |
 | `POST` | `/agents/v1/orders/sync` | Import missed orders from connected Shopify shops (scoped: post-connect, not cancelled/fulfilled) and refresh provider statuses. Optional `{store_uuid}`. Read `shopify[]` + `errors[]`. |
 | `POST` | `/agents/v1/orders/{uuid}/link-ecommerce-order` | Link a manual ApparelHub order to a storefront order. |
 
@@ -397,9 +398,9 @@ orders (`margin_coverage`). Full contract in `references/analytics.md`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `POST` | `/agents/v1/store/{uuid}/merchandise_provider/{provider_uuid}/connect-pat` | Connect a Printify PAT. |
+| `POST` | `/agents/v1/store/{uuid}/merchandise_provider/{provider_uuid}/connect-pat` | Connect a Printify PAT or Gelato key. Not for sign-in providers (Printful, Toolbox POD), which connect through `store/create/merchandise_provider`. |
 | `DELETE` | `/agents/v1/store/{uuid}/merchandise_provider/{provider_uuid}/connection` | Disconnect. |
-| `GET` | `/agents/v1/store/{uuid}/merchandise_provider/{provider_uuid}/connection/health` | Health-check the connection. |
+| `GET` | `/agents/v1/store/{uuid}/merchandise_provider/{provider_uuid}/connection/health` | Health-check the connection. Toolbox POD returns itemised `checks` and merchant-ready `fixes[]` (`references/toolbox-pod.md` section 7). |
 
 ### Membership (read-only)
 

@@ -188,19 +188,25 @@ Once more than one provider can make the item:
    - This is **base production cost**. It excludes shipping and tax, and
      shipping is often what actually decides between two providers on
      bulky or heavy items.
-   - `estimate_order_costs` covers production plus shipping plus tax, but
-     only for **Printful and Gelato**. There is no landed-cost estimate
-     for Printify, so a true landed comparison across all three is not
-     something you can produce today. Do not imply otherwise.
+   - `estimate_order_costs` covers production plus shipping plus tax for
+     **Printful, Gelato and Toolbox POD** (Toolbox POD charges one flat
+     shipping fee per order, so it gets cheaper per item as an order
+     grows). There is no landed-cost estimate for Printify, so a true
+     landed comparison across every provider is not something you can
+     produce today. Do not imply otherwise.
 
    See `references/pricing.md` for how cost gets onto a variant.
-2. **Decoration quality.** A printed cap and an embroidered cap are
+2. **Where the buyers are.** Read `ships_to` on each provider (section
+   7). A provider that cannot ship to a large share of the merchant's
+   buyers is the wrong single choice however cheap it is; offer the
+   same design on two providers instead.
+3. **Decoration quality.** A printed cap and an embroidered cap are
    different products, not two ways of making one. If the user asked for
    an embroidered look, `accepts_photoreal: false` is what you want.
-3. **Keep a capsule consistent.** If the rest of a collection is on one
+4. **Keep a capsule consistent.** If the rest of a collection is on one
    provider, staying there simplifies fulfillment and shipping. Say so
    and let the user choose — do not silently split a capsule.
-4. **Mockups.** Some providers render some garments poorly. Always look
+5. **Mockups.** Some providers render some garments poorly. Always look
    at the mockup before shipping (safety rail 4b).
 
 ---
@@ -227,3 +233,27 @@ Also good, when nothing turned up:
 
 The difference is that both good versions name what was checked, and
 leave the user somewhere to go.
+
+---
+
+## 7. Where a provider can ship: `ships_to`
+
+Providers do not all ship everywhere. `ships_to` on the provider
+(`GET /agents/v1/merchandise/providers`), on catalog garment detail and on
+every merchant product is a list of country codes such as `["US"]`.
+**`null`, absent or an empty list means worldwide**; never read an empty
+list as "ships nowhere". Today the one limited provider is Toolbox POD
+(US only, see `references/toolbox-pod.md`).
+
+What follows from it:
+
+- Before building on a limited provider, compare `ships_to` with where the
+  merchant sells. The store payload's `shipping_warnings[]` says when a
+  connected storefront sells beyond what a provider can ship
+  (`channel_ships_beyond_provider`), or that we could not tell
+  (`channel_destinations_unknown`, which is unknown, not fine).
+- An order going outside a product's `ships_to` is held, never sent to the
+  provider (`hold_details.code = "destination_unsupported"`). How to handle
+  it is in `references/orders-and-fulfillment.md` section 5b.
+- Say it as a fact about that provider: "Toolbox POD ships to US addresses
+  only", never "this tee can't ship to Canada".

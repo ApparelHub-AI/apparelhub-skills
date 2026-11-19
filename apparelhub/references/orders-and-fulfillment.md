@@ -90,6 +90,61 @@ The audit log records exactly what happened:
 
 If a customer asks "did my order get cancelled," check the local order status AND the audit trail for the `provider_cancel.status`. Local cancelled + provider success = clean cancel. Local cancelled + provider failed = the merchant may still get charged by the provider; flag this.
 
+### Paid orders that cannot be cancelled
+
+Some providers start production as soon as an order is paid. On Toolbox POD
+a cancel after payment is normally refused with a message saying the order
+is already being made; treat a paid Toolbox POD order as final, check it
+before confirming, and send the merchant to Toolbox POD support if something
+is wrong (`references/toolbox-pod.md` section 4).
+
+---
+
+## 5b. Orders held because the provider cannot ship there (`hold_details`)
+
+A provider can be limited to some countries (`ships_to`, see
+`references/provider-selection.md` section 7). When an order for such a
+product is going elsewhere, the platform holds it and **never sends it to
+the provider**, so nothing is charged. The order has `requires_approval:
+true`, a plain `hold_reason`, and a structured `hold_details`:
+
+| Field | Meaning |
+|---|---|
+| `code` | `destination_unsupported` for this case. Other codes are provider payment holds, see `references/toolbox-pod.md` section 4. |
+| `country` | Where the order is going. |
+| `provider_name`, `ships_to` | The provider and where it can ship. |
+| `product_variant_ids`, `items[]` | The affected lines. Match on `product_variant_id`; `order_item_uuids` is always empty. |
+| `message` | Merchant-ready explanation. Show it as written when present. |
+| `suggested_reroute` | `{product_uuid, product_name, provider_uuid, provider_name}` or `null`. |
+
+**Act on `suggested_reroute`:**
+
+- **Set:** the same design exists on a provider that ships there, in a
+  store connected to the same storefront the order came from. With the
+  merchant's agreement, move it:
+  `POST /agents/v1/orders/<order_uuid>/reroute` with
+  `{"product_uuid": "<suggested_reroute.product_uuid>"}`. The order is
+  recreated in that store, the held order is closed, and the storefront
+  link (and tracking) moves with it. Handle the new order as usual.
+- **`null`:** nothing to move it to. A storefront order is cancelled and the
+  customer refunded **on the storefront**. A manual order (no storefront)
+  can be cancelled, or the design built on a provider that ships there and
+  the order created again.
+
+Reroute refuses with `409` and a merchant-readable `message`:
+`not_destination_held`, `destination_unsupported`,
+`product_not_in_connected_store`, `reroute_variants_missing`,
+`recipient_unavailable`, or `reroute_channel_mismatch` (the target store is
+not connected to the order's storefront, so tracking could not reach the
+customer: cancel and refund there instead). Do not retry a 409 with the
+same product.
+
+⛔ Never change the shipping address to get an order through, and never
+move an order to a product the merchant did not agree to.
+
+MCP callers: `get_order_details` returns `hold_details`; `reroute_order`
+moves it.
+
 ---
 
 ## 6. Reading fulfillment provider data on the order
