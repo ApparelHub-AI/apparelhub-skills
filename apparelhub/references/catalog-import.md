@@ -185,6 +185,23 @@ On the ApparelHub MCP server (0.17.0+) the same flow is three tools:
 `import_channel_catalog` (start; on `import_in_progress` it returns the run
 already going, with `already_running: true`), `get_catalog_import_run` (poll),
 and `list_tracked_listings` (read, including each channel's `catalog_read`).
+Section 9's one-table view is `where_its_listed` (0.25.0+).
+
+### 7a. One shop, several stores: offer an import once
+
+A merchant often connects ONE shop under several ApparelHub stores. Each
+channel in `channels[]` therefore carries two run fields:
+
+| Field | Meaning |
+|---|---|
+| `last_run` | The latest import started from THIS store's connection |
+| `shop_last_run` | The latest import of the SHOP, across every store connected to it that you can reach |
+
+**Offer an import when `shop_last_run` is null, not when `last_run` is.** A
+shop imported under a sibling store has already been imported; running it
+again from this store only re-reads the same listings. `shop_url` names the
+shop and `is_primary_for_shop` marks the connection that receives orders for
+items no store made.
 
 ---
 
@@ -250,3 +267,75 @@ already sent to the provider are not affected.
 MCP (0.20.0+): `bind_tracked_listing` previews and binds in one call (it only
 binds when everything maps; otherwise it returns `bound: false` with what is
 left), and `unbind_tracked_listing`.
+
+---
+
+## 9. Where everything is listed, in one table
+
+`GET /store/listings/matrix` answers "where is every product listed?" across
+all of the merchant's stores and, by default, all of their workspaces. It is
+the same data the merchant sees on their **Where it's listed** page, so what
+you tell them matches what they see. Use it instead of composing stores x
+products x tracked listings yourself.
+
+| Param | Values |
+|---|---|
+| `all_workspaces` | `true` (default): every workspace you can reach. `false`: only the request's workspace (`?workspace=`) |
+| `store` | Only this store uuid and the storefronts it is connected to |
+| `provider` | Only storefronts on this channel, by name (`WooCommerce`, `TikTok Shop`) |
+| `q` | Product name contains this text |
+| `filter` | `all` (default), `nowhere` (listed on no storefront), `failed` (a failed sync somewhere), `external` (only the merchant's own channel listings) |
+| `limit` / `offset` | Rows per page, 1 to 1000 (default 200) |
+
+Response, trimmed:
+
+```json
+{
+  "storefronts": [{
+    "key": "woocommerce:shop.example.com", "provider": "WooCommerce",
+    "shop_label": "shop.example.com", "admin_url": "https://shop.example.com/wp-admin/admin.php?page=wc-admin",
+    "stores": [{"uuid": "...", "name": "Acme Apparel", "workspace_uuid": "...", "workspace_name": "Default",
+                "integration_uuid": "...", "is_primary_for_shop": true, "last_import_at": "..."}],
+    "listed": 12
+  }],
+  "rows": [{
+    "kind": "product", "uuid": "...", "name": "Acme Tee", "product_uuid": "...",
+    "stores": [{"uuid": "...", "name": "Acme Apparel", "workspace_uuid": "...", "workspace_name": "Default"}],
+    "cells": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "apparelhub",
+              "store_uuid": "...", "workspace_uuid": "...", "integration_uuid": "...", "error": null}}
+  }, {
+    "kind": "tracked", "uuid": "tracked:...", "name": "Their Mug", "external_id": "900",
+    "listing": {"uuid": "...", "store_uuid": "...", "workspace_uuid": "...", "bound": false, "binding": null},
+    "cells": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "channel", "...": "..."}}
+  }],
+  "total_rows": 2, "limit": 200, "offset": 0,
+  "totals": {"products": 2, "storefronts": 1, "listed_nowhere": 0, "failed": 0, "external": 1,
+             "per_storefront": {"woocommerce:shop.example.com": 2}}
+}
+```
+
+How to read it:
+
+- **A storefront is one real shop**, however many ApparelHub stores are
+  connected to it. `stores[]` names every one (primary first); `admin_url` is
+  the channel's own admin for that shop.
+- **A product ApparelHub made is one row** however many stores hold it. A
+  **tracked listing** (section 1) is one row per shop however many stores
+  imported it; its `listing` is the copy to bind (section 8), in the store and
+  workspace it names.
+- **`cells[<storefront key>]`**: `status` is `listed`, `in_progress`, `failed`
+  (with `error`), `not_listed`, `draft` or `archived`. `managed_by` is
+  `apparelhub` (ApparelHub made it and syncs it: act on it through
+  `store_uuid`) or `channel` (the merchant made it on the channel and manages
+  it there: you can report it, not change it). **A missing key** means the
+  product is in no store connected to that shop, which is different from
+  `not_listed`.
+- `in_no_store: true` on a product row: ApparelHub made it and it is still on
+  a shop, but no store holds it any more.
+- `workspace_uuid` on cells and stores tells you which workspace to pass when
+  you act on something, since the table spans workspaces.
+
+Refusals: `400 invalid_paging` / `invalid_filter`; `403 workspace_forbidden`
+and `404 workspace_not_found` for an explicit `?workspace=` you cannot reach.
+MCP: `where_its_listed` (0.25.0+), same parameters.
+
