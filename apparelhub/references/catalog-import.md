@@ -285,6 +285,9 @@ products x tracked listings yourself.
 | `provider` | Only storefronts on this channel, by name (`WooCommerce`, `TikTok Shop`) |
 | `q` | Product name contains this text |
 | `filter` | `all` (default), `nowhere` (listed on no storefront), `failed` (a failed sync somewhere), `external` (only the merchant's own channel listings) |
+| `sort` | `name` (default), `listed_at` (last went live on a shop), `created_at`, `updated_at`, `synced_at` (last sync to its fulfillment provider). Rows without the value come last in either direction |
+| `dir` | `asc` (default) or `desc` |
+| `group` | `workspace`: rows come back grouped by their first store's workspace, each carrying `workspace` |
 | `limit` / `offset` | Rows per page, 1 to 1000 (default 200) |
 
 Response, trimmed:
@@ -300,7 +303,10 @@ Response, trimmed:
   }],
   "rows": [{
     "kind": "product", "uuid": "...", "name": "Acme Tee", "product_uuid": "...",
+    "created_at": "...", "updated_at": "...", "synced_at": "...", "listed_at": "...",
+    "workspace": {"uuid": "...", "name": "Default"},
     "stores": [{"uuid": "...", "name": "Acme Apparel", "workspace_uuid": "...", "workspace_name": "Default"}],
+    "store_cells": {"<store uuid>": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "apparelhub", "...": "..."}}},
     "cells": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "apparelhub",
               "store_uuid": "...", "workspace_uuid": "...", "integration_uuid": "...", "error": null}}
   }, {
@@ -334,8 +340,11 @@ How to read it:
   a shop, but no store holds it any more.
 - `workspace_uuid` on cells and stores tells you which workspace to pass when
   you act on something, since the table spans workspaces.
+- `cells` is the best status per storefront; `store_cells` keeps every
+  (store, storefront) status, which answers "which of my stores lists it
+  where" when one shop is connected under several stores.
 
 Refusals: `400 invalid_paging` / `invalid_filter`; `403 workspace_forbidden`
 and `404 workspace_not_found` for an explicit `?workspace=` you cannot reach.
-MCP: `where_its_listed` (0.25.0+), same parameters.
+MCP: `where_its_listed` (0.25.0+; `sort`, `dir`, `group` and the timestamps need 0.25.1), same parameters.
 
