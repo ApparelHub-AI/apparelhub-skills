@@ -283,9 +283,12 @@ products x tracked listings yourself.
 | `all_workspaces` | `true` (default): every workspace you can reach. `false`: only the request's workspace (`?workspace=`) |
 | `store` | Only this store uuid and the storefronts it is connected to |
 | `provider` | Only storefronts on this channel, by name (`WooCommerce`, `TikTok Shop`) |
+| `fulfillment_provider` | Only products made with this fulfillment provider, by uuid (take it from `fulfillment_providers` in the response), plus channel listings bound to one. An unknown uuid returns no rows |
 | `q` | Product name contains this text |
-| `filter` | `all` (default), `nowhere` (listed on no storefront), `failed` (a failed sync somewhere), `external` (only the merchant's own channel listings) |
-| `sort` | `name` (default), `listed_at` (last went live on a shop), `created_at`, `updated_at`, `synced_at` (last sync to its fulfillment provider). Rows without the value come last in either direction |
+| `filter` | `all` (default), `nowhere` (listed on no storefront), `failed` (a failed sync somewhere), `external` (only the merchant's own channel listings), `ordered` (ordered at least once) |
+| `synced_after` / `synced_before` | `YYYY-MM-DD`, inclusive UTC days, on when the row was last synced with its fulfillment provider. A row never synced matches neither bound. Bad input is `400 invalid_date` |
+| `listed_after` / `listed_before` | Same, on when the row last went live on a sales channel |
+| `sort` | `name` (default), `listed_at` (last went live on a shop), `created_at`, `updated_at`, `synced_at` (last sync to its fulfillment provider), `last_ordered_at` (latest non-cancelled order). Rows without the value come last in either direction |
 | `dir` | `asc` (default) or `desc` |
 | `group` | `workspace`: rows come back grouped by their first store's workspace, each carrying `workspace` |
 | `limit` / `offset` | Rows per page, 1 to 1000 (default 200) |
@@ -304,6 +307,7 @@ Response, trimmed:
   "rows": [{
     "kind": "product", "uuid": "...", "name": "Acme Tee", "product_uuid": "...",
     "created_at": "...", "updated_at": "...", "synced_at": "...", "listed_at": "...",
+    "ordered": true, "last_ordered_at": "...",
     "workspace": {"uuid": "...", "name": "Default"},
     "stores": [{"uuid": "...", "name": "Acme Apparel", "workspace_uuid": "...", "workspace_name": "Default"}],
     "store_cells": {"<store uuid>": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "apparelhub", "...": "..."}}},
@@ -315,7 +319,8 @@ Response, trimmed:
     "cells": {"woocommerce:shop.example.com": {"status": "listed", "managed_by": "channel", "...": "..."}}
   }],
   "total_rows": 2, "limit": 200, "offset": 0,
-  "totals": {"products": 2, "storefronts": 1, "listed_nowhere": 0, "failed": 0, "external": 1,
+  "fulfillment_providers": [{"uuid": "...", "name": "Printful"}],
+  "totals": {"products": 2, "storefronts": 1, "listed_nowhere": 0, "failed": 0, "external": 1, "ordered": 1,
              "per_storefront": {"woocommerce:shop.example.com": 2}}
 }
 ```
@@ -343,8 +348,21 @@ How to read it:
 - `cells` is the best status per storefront; `store_cells` keeps every
   (store, storefront) status, which answers "which of my stores lists it
   where" when one shop is connected under several stores.
+- **`ordered` / `last_ordered_at`**: whether at least one non-cancelled order
+  holds one of the product's variants, and when the latest was placed. It is
+  a yes/no on purpose: counts and revenue come from the analytics endpoints.
+  A channel listing that is not bound to a product is never `ordered`
+  (order lines carry the channel's variant id, not its product id, so there
+  is no reliable link); bind it (section 8) and it inherits its product's
+  orders. `filter=ordered` and `sort=last_ordered_at` use the same fact.
+- **Narrowing by time and provider** answers the questions a merchant
+  actually asks: "what went live on TikTok Shop this week" is
+  `provider=TikTok Shop&listed_after=<7 days ago>`; "what did I sync with
+  Printful before October" is `fulfillment_provider=<Printful uuid>&synced_before=2026-09-30`.
+  `totals` describe the narrowed set, so one `limit=1` read gives the counts.
 
-Refusals: `400 invalid_paging` / `invalid_filter`; `403 workspace_forbidden`
+Refusals: `400 invalid_paging` / `invalid_filter` / `invalid_date`; `403 workspace_forbidden`
 and `404 workspace_not_found` for an explicit `?workspace=` you cannot reach.
-MCP: `where_its_listed` (0.25.0+; `sort`, `dir`, `group` and the timestamps need 0.25.1), same parameters.
+MCP: `where_its_listed` (0.25.0+; `sort`, `dir`, `group` and the timestamps need 0.25.1; the date
+bounds, `fulfillment_provider`, `ordered` / `last_ordered_at` and `fulfillment_providers` need 0.25.2), same parameters.
 
