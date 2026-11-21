@@ -170,11 +170,11 @@ Iterate `shipments[]`. Give the merchant tracking numbers + carrier + URLs for e
 
 ### ⚠️ `needs_attention`: the order will NOT complete on its own
 
-Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_attention`. It's `null` when nothing needs the merchant. Otherwise it's `{kind, severity, title, message}` and **you must tell the user**, quoting `message`:
+Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_attention`. It's `null` when nothing needs the merchant. Otherwise it's `{kind, severity, title, message}` (plus `reason` and `recovery_action` for `provider_failed`) and **you must tell the user**, quoting `message`:
 
 | `kind` | What happened | What to suggest |
 |---|---|---|
-| `provider_failed` | The fulfillment provider rejected the order (billing, address, print files). It shows as cancelled, but it's fixable. | Fix the cause the message names (for example, add a payment method in the provider account), then resubmit. |
+| `provider_failed` | The fulfillment provider refused the order it already holds (billing, address, print files). `reason` is the provider's own words (for example `No payment method added`). The order reads `fulfillment_status: cancelled` with `status: failed`; it is terminal on its own, but fixable. | Fix the cause `reason` names on the provider account, then, if `recovery_action` is `resubmit_to_fulfillment`, resubmit the SAME order (next subsection). If `recovery_action` is `null`, nothing at the provider can be resubmitted: create a new order. |
 | `provider_cancelled` | The provider cancelled the order. The buyer paid and nothing will ship. | Find out why with the provider; refund or recreate the order. |
 | `cancel_not_stopped` | The buyer cancelled on the sales channel, but production had already started, so it will still ship. | Contact the provider to try to stop it, and handle the refund on the channel. |
 | `not_submitted` | Paid, but never sent to the provider (often the channel hasn't released the shipping address yet). Retried hourly. If the channel's ship-by deadline is close or passed, the message says so and `severity` is `error`. | Wait, or push it with `submit-fulfillment` once the address exists. If the deadline is close, treat it as urgent. |
@@ -185,6 +185,35 @@ Every order returned by `GET /orders` and `GET /orders/<uuid>` carries `needs_at
 **`ship_by_at`** is the sales channel's ship-by deadline in UTC (set for TikTok Shop orders, `null` when the channel has none). When the merchant asks "is anything urgent?", sort open orders by it.
 
 An ordinary `cancelled` with `needs_attention: null` is a cancellation the merchant or buyer made and that was honoured. Nothing to do. ApparelHub also alerts the merchant in-app and by email for each of these, so you can say "you should also have an email about this." MCP: `list_my_orders` and `get_order_details` return the same field.
+
+### Recovering a provider-failed order (`recovery_action: resubmit_to_fulfillment`)
+
+When `needs_attention.kind` is `provider_failed` and `recovery_action` is `resubmit_to_fulfillment`,
+the provider still holds the order and refused to run it, almost always for billing. The order is
+recovered in place, on the same ApparelHub order and the same provider order:
+
+1. **Quote `needs_attention.reason` to the merchant** and have them fix it on their provider
+   account (for `No payment method added`: add or update the payment method in the Printful account).
+   Nothing in ApparelHub can fix a provider billing problem.
+2. **Resubmit the SAME order**: `POST /agents/v1/orders/<uuid>/submit-fulfillment` with `{}` (or
+   `POST /agents/v1/orders/<uuid>/confirm`; both take the same path for this case). This confirms the
+   provider order that already exists, exactly as the "Confirm order" button on a failed order does in
+   the provider's own dashboard. **It never creates a second provider order, so there is no double
+   charge.** Do not create a new ApparelHub order for the same sale.
+3. **Read the result.** `200` with top-level `resubmitted: true` and `external_id` (the provider order
+   id): the order is back to `status: pending` / `fulfillment_status: submitted`, `needs_attention` is
+   `null`, and status polling resumes. `502` with `error_code: provider_resubmit_refused`: the provider
+   refused again and `message` carries its reason; the order is unchanged and still flagged. **Do not
+   loop on the 502.** Report the reason to the merchant and wait for them to fix it.
+
+MCP: `submit_order_to_fulfillment` and `confirm_order` return `resubmitted: true` on success and
+`provider_refused` (with the provider's message) on the 502.
+
+**Not recoverable this way:** an order the merchant cancelled AFTER the provider failure. Its
+`needs_attention` is `null`, it no longer shows as on hold, and `submit-fulfillment` / `confirm` return
+`409 order_already_submitted_to_provider`. Treat it as cancelled; a new order is the only way forward.
+A provider-failed order does not show as `on_hold` either: it is `fulfillment_status: cancelled` with
+`status: failed` until it is resubmitted, and a status refresh never flips it back to `on_hold`.
 
 ### Profit on a split checkout (`checkout_split`)
 
@@ -403,7 +432,10 @@ curl -sS -X POST ".../agents/v1/orders/<uuid>/approve" -H "x-api-key: $APPARELHU
 # Never report "approved, it's on its way" without checking auto_submitted.
 
 # Push a paid order that never reached its provider (empty body = use the
-# stored/channel shipping address)
+# stored/channel shipping address). ALSO the recovery for a provider-failed
+# order (needs_attention.kind=provider_failed, recovery_action=
+# resubmit_to_fulfillment): re-confirms the SAME provider order, never a
+# second one. 200 resubmitted:true, or 502 provider_resubmit_refused (do not loop).
 curl -sS -X POST ".../agents/v1/orders/<uuid>/submit-fulfillment" -H "x-api-key: $APPARELHUB_API_KEY" \
   -H 'Content-Type: application/json' -d '{}'
 

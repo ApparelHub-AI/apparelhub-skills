@@ -16,7 +16,7 @@ How to interpret API errors and the most common silent-failure modes.
 | 422 | Validation error — field-level issue with the request body | Read the error body. Field name mismatches are the most common cause (Phase 3 vs Phase 5 names — see `references/product-creation-pipeline.md`). |
 | 429 | Rate limited — **read the body before deciding what to back off** | Two different things. No `error` field (or `platform_rate_limited`): YOUR key hit the platform throttle — back off exponentially. Default tier is 10 req/sec, 10K/mo. Professional is 50 req/sec, 50K/mo. Enterprise is 200 req/sec, 500K/mo. `error: provider_rate_limited`: the FULFILLMENT PROVIDER is throttling us and your key is fine — wait `retry_after` and retry the SAME request. See §2f. |
 | 500 | Server error | Retry ONCE with a 2-3s backoff. If it persists, capture the response body and tell the user there's a platform issue. Don't hammer it. |
-| 502 / 503 / 504 | Upstream gateway or timeout | Backoff and retry up to 3 times with exponential delays. After that, it's a platform issue. |
+| 502 / 503 / 504 | Upstream gateway or timeout | Backoff and retry up to 3 times with exponential delays. After that, it's a platform issue. **Exception:** a 502 whose body carries `error_code: provider_resubmit_refused` is the fulfillment provider refusing an order again, not a gateway problem. Never retry it; see §2g. |
 
 ---
 
@@ -59,6 +59,12 @@ A product with this exact name + provider already exists for this user. Either r
 From `DELETE /images/generated/{uuid}`. A live (non-archived) product still uses this design, so **nothing was deleted**. The body carries the blocking `products[]` (`uuid` + `name`).
 
 This is a guard, not a dead end. **Archive the design instead** (`PATCH /images/generated/{uuid}` with `{"archived": true}`), which is reversible and leaves those products untouched. Only if the user explicitly wants the design erased permanently should you archive or delete the blocking products first and retry. Do not report "designs cannot be deleted" and abandon the task. See `references/design-rules.md` section 5d.
+
+### `image_update_failed` / `image_list_failed` / `image_delete_failed` (500)
+
+From `PATCH /images/generated/{uuid}`, `GET /images/generated` and `DELETE /images/generated/{uuid}`. Something failed on the platform side while handling the design; the body is a plain `message` plus one of these codes and **nothing was changed** (the update was not applied, the delete did not happen). Transient: retry the same call once after a 2 to 3 second pause, then report it to the user with the code if it fails again. The platform logs the cause; the body deliberately does not carry raw error text.
+
+`PATCH /images/generated/{uuid}` also answers `400` with `error_code: invalid_request` when the body is not JSON (send `Content-Type: application/json` and a JSON object), and `404` when the image does not exist or is not the caller's. Neither of those is transient.
 
 ### `design_not_ready` / `design_processing_failed`
 
@@ -615,6 +621,16 @@ reasons above (plus `provider_rate_limited`, which is unknown like
 the merchant has not turned on purchasing or set a spending limit, so orders
 cannot be paid. Relay the fix. Details in `references/toolbox-pod.md`
 section 7.
+
+---
+
+## 2g. Order recovery refused: `provider_resubmit_refused` (502)
+
+From `POST /orders/{uuid}/submit-fulfillment` and `POST /orders/{uuid}/confirm` on a provider-failed order (`needs_attention.kind` is `provider_failed`, `recovery_action` is `resubmit_to_fulfillment`; see `orders-and-fulfillment.md` §7). The call asked the provider to confirm the order it already holds, and the provider refused again. `message` is the provider's reason (usually billing, for example `No payment method added`). **The order is unchanged and still flagged; nothing was charged and no second provider order exists.**
+
+This is not the transient 502 of §1. Retrying without a change on the provider account fails identically. Quote the reason to the merchant, let them fix it on their provider account, and resubmit once they say it is done. A `200` with `resubmitted: true` means it took.
+
+Two neighbours that are not this code: `409 order_already_submitted_to_provider` on a cancelled order means the merchant cancelled it after the provider failure and it cannot be resubmitted (create a new order); `409 order_not_provider_failed` means the order was never provider-failed, so there is nothing to resubmit (use the normal submit or confirm flow).
 
 ---
 
