@@ -70,7 +70,7 @@ the prompt in context if the call is one you intended to make.
 | `POST` | `/agents/v1/images/generate` | Generate a design image. Text-to-image OR img2img edit. |
 | `GET` | `/agents/v1/images/generated` | List previously generated images. Active only unless `?archived=true`. Filters: `limit` (max 500), `sort` (`newest`/`oldest`/`most_used`), `search`, `edited`, `source` (AI source NAME, e.g. `Nano Banana`; comma-separated, case-insensitive; an unknown name is a 400 with the valid list), `source_uuid`, `size`, `offset`, and **`on_products=false` to find orphan designs nothing is using**. |
 | `POST` | `/agents/v1/images/generated/{uuid}/transform` | Upload a processed (e.g. transparency-keyed) version. Multipart `image=@...` or `image` data URL. Returns a NEW image UUID. |
-| `PATCH` | `/agents/v1/images/generated/{uuid}` | Update a design. Accepts **only** `title` and `archived`. Send `{"archived": true}` to archive (reversible, safe) and `false` to restore. Other fields are ignored and still return `200`. |
+| `PATCH` | `/agents/v1/images/generated/{uuid}` | Update a design. Accepts **only** `title` and `archived`. Send `{"archived": true}` to archive (reversible, safe) and `false` to restore. Other fields are ignored and still return `200`. A non-JSON body is `400 invalid_request`; an image that is not yours or does not exist is `404`; a platform failure is `500 image_update_failed` with nothing changed (retry once). |
 | `DELETE` | `/agents/v1/images/generated/{uuid}` | Permanently delete a design and its files. Irreversible. Returns `409 image_in_use` (with the blocking `products[]`) if a live product uses it; archive it instead. |
 
 **`POST /images/generate` request body**:
@@ -362,7 +362,8 @@ push as `active` when the user explicitly says "make it live."
 | `GET` | `/agents/v1/orders` | List recent orders. |
 | `GET` | `/agents/v1/orders/{uuid}` | Inspect one order. |
 | `POST` | `/agents/v1/orders/{uuid}/approve` | Approve a held order. |
-| `POST` | `/agents/v1/orders/{uuid}/submit` | Submit an order for fulfillment. |
+| `POST` | `/agents/v1/orders/{uuid}/submit-fulfillment` | Submit an order to its fulfillment provider (send `{}`). Also recovers a provider-failed order (`needs_attention.recovery_action` = `resubmit_to_fulfillment`) by confirming the SAME provider order again: `200` with `resubmitted: true`, or `502 provider_resubmit_refused` (do not loop). See `references/orders-and-fulfillment.md` §7. |
+| `POST` | `/agents/v1/orders/{uuid}/confirm` | Confirm a draft order with its provider (starts production; on Toolbox POD this is what pays). Accepts a provider-failed order too, with the same resubmit semantics as `submit-fulfillment`. |
 | `POST` | `/agents/v1/orders/{uuid}/cancel` | Cancel an order. |
 | `POST` | `/agents/v1/orders/{uuid}/reroute` | Move an order held as `destination_unsupported` to `hold_details.suggested_reroute.product_uuid` (body `{"product_uuid"}`). Only within the order's own storefront; 409 otherwise. See `references/orders-and-fulfillment.md` section 5b. |
 | `POST` | `/agents/v1/orders/sync` | Import missed orders from connected Shopify shops (scoped: post-connect, not cancelled/fulfilled) and refresh provider statuses. Optional `{store_uuid}`. Read `shopify[]` + `errors[]`. |
