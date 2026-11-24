@@ -38,15 +38,28 @@ environment can do, cheapest first.
 | Route | Use when | Cost to you |
 |---|---|---|
 | **`source_url`** | The file is reachable at an https URL that does not require sign-in | One call. Nothing enters your context. |
-| **Presigned** (no source) | You can make an HTTP request yourself (`curl`, `fetch`, `requests`) | Two calls. Nothing enters your context. Full resolution. |
-| **`image_base64`** | Neither of the above is possible | **Roughly 350k tokens per megabyte of file.** Small files only. |
+| **`image_base64`** | You can read the file's bytes and it is small (4MB or less) | **Roughly 350k tokens per megabyte of file.** Small files only. |
+| **Presigned** (`presigned: true`) | You can make an HTTP PUT yourself (`curl`, `fetch`, `requests`) **and** call back to finish | Two calls. Nothing enters your context. Full resolution. |
 
-**Default to the presigned route** if you have a shell or any HTTP client. It is
-the only one that is both free in context and unlimited in file size.
+**Presigned is only for callers that can do both steps.** If you have a shell or
+an HTTP client it is the best route: free in context and unlimited in file size.
+Starting it reserves a design in the merchant's gallery straight away, though.
+If the PUT or the finishing call never happens, the merchant sees a failed
+upload. So never start one you cannot finish. Over MCP, presigned mode is opt-in
+(`presigned: true`). Calling `upload_design` with no file and no opt-in reserves
+nothing and returns `file_required`.
 
-`image_base64` exists so that a caller with no shell and no hosting is not stuck.
-It is not a convenience — a 3MB logo inlined as base64 will consume most of a
-context window. Reach for it last.
+`image_base64` is not a convenience: a 3MB logo inlined as base64 will consume
+most of a context window.
+
+### A file the user attached in the chat
+
+An image someone drops into a chat conversation is usually something you can
+*see*, not a file you can PUT or base64-encode. Seeing it is not enough to
+upload it, and you must never redraw or regenerate it instead. Ask the merchant
+for a public link to it (then use `source_url`), or ask them to upload it
+themselves at **apparelhub.ai/images/gallery** and tell you when it's done. Then
+use that design from the gallery (`list_my_designs`).
 
 ### With the MCP server
 
@@ -56,14 +69,17 @@ One tool, `upload_design`, does all three:
 upload_design({ source_url: "https://…/client-logo.png" })
 → { status: "completed", design_uuid: "…", url: "…" }
 
-upload_design({ filename: "client-logo.png", content_type: "image/png" })
-→ { mode: "presigned", upload_url: "…", image_uuid: "…", next_step: "…" }
+upload_design({ filename: "client-logo.png", content_type: "image/png", presigned: true })
+→ { mode: "presigned", upload_url: "…", image_uuid: "…", next_step: "…", important: "…" }
    … you PUT the bytes …
 upload_design({ image_uuid: "…" })
 → { status: "completed", design_uuid: "…" }
 
 upload_design({ image_base64: "<base64>", filename: "seal.png" })
 → { status: "completed", design_uuid: "…" }
+
+upload_design({ filename: "client-logo.png" })   // no file, no opt-in
+→ error { code: "file_required", suggestion: "…" }   // nothing was reserved
 
 upload_design({ source_url: "https://…/mark.svg" })
 → { status: "completed", design_uuid: "…",
@@ -255,8 +271,9 @@ against the account's storage allowance.
 
 ## 5. When you are stuck
 
-If you cannot upload — no shell, no hosting, file too large to inline — say so
-plainly and name what you need:
+If you cannot upload (no shell, no link, file only attached in chat, too large to
+inline), say so plainly and name what you need. Pointing the merchant at
+apparelhub.ai/images/gallery is usually the fastest fix:
 
 > I need `client-logo.png` uploaded to the *Acme Co* workspace before I can build
 > the paw-only tee. It is the client's own mark and they have asked that it not be
