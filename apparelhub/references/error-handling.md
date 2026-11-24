@@ -103,14 +103,24 @@ expensive one to get wrong.
 If you are handed a file the merchant already owns — a logo, a brand mark, a
 cleared cover — and you cannot find a way to put it on a product, **do not
 conclude it is impossible and do not generate a lookalike.** Uploading is
-supported: `references/byo-artwork.md`. Three routes (public `source_url`, a
-presigned URL you PUT to yourself, or inline base64), all of which return a uuid
+supported: `references/byo-artwork.md`. Three routes (public `source_url`,
+inline base64, or a presigned URL you PUT to yourself, which is only for callers
+that can make the PUT and call back), all of which return a uuid
 that works anywhere a generated design uuid works.
 
 Codes you may see on that path. A refused upload comes back from the status
 poll (`GET /agents/v1/images/upload/<image_uuid>/status`) as
 `processing_status: "failed"` with a human-readable `error` and, for the SVG
 refusals below, a stable `error_code`. Branch on the code.
+
+### `file_required` (MCP `upload_design`)
+
+You called `upload_design` with no `source_url`, no `image_base64`, no
+`image_uuid` and no `presigned: true`. Nothing was uploaded and nothing was
+reserved, so there is nothing to clean up. Supply the file one of those ways.
+If the image only exists as an attachment in this chat, you cannot upload it
+yourself: ask the merchant for a public link, or ask them to upload it at
+apparelhub.ai/images/gallery. Do not redraw it.
 
 ### `unsupported_format`
 
